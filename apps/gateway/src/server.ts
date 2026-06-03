@@ -1,12 +1,22 @@
 import cors from 'cors';
 import express from 'express';
 import { createProxyMiddleware } from 'http-proxy-middleware';
-import { authenticate, signUser } from './auth.js';
+import { authenticate, requirePermission, signUser } from './auth.js';
 import { config } from './config.js';
+import { createSetupToken, hashPassword, hashSetupToken, verifyPassword } from './passwords.js';
 import {
+  completePasswordSetup,
+  createPasswordSetupToken,
+  createPlatformUser,
+  deletePlatformUser,
   findEnabledModuleByCode,
+  findPasswordSetupToken,
   findUserByEmail,
-  listEnabledModulesForPermissions
+  findUserPasswordHashByEmail,
+  listPlatformRoles,
+  listPlatformUsers,
+  listEnabledModulesForPermissions,
+  updatePlatformUser
 } from './repositories/platformRepository.js';
 
 const app = express();
@@ -21,15 +31,69 @@ app.get('/health', (_req, res) => {
 app.post('/api/auth/login', async (req, res, next) => {
   try {
     const email = String(req.body.email ?? 'admin@example.com').trim().toLowerCase();
-    const user = (await findUserByEmail(email)) ?? (await findUserByEmail('admin@example.com'));
+    const password = String(req.body.password ?? '');
+    const user = await findUserByEmail(email);
+    const passwordHash = await findUserPasswordHashByEmail(email);
 
-    if (!user) {
-      res.status(401).json({ message: 'Demo admin user is not seeded' });
+    if (!user || !verifyPassword(password, passwordHash)) {
+      res.status(401).json({ message: 'Invalid email or password' });
       return;
     }
 
     const token = signUser(user);
     res.json({ token, user });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/auth/password-setup/:token', async (req, res, next) => {
+  try {
+    const tokenHash = hashSetupToken(String(req.params.token));
+    const setup = await findPasswordSetupToken(tokenHash);
+    const expired = setup ? new Date(setup.expires_at).getTime() < Date.now() : true;
+
+    if (!setup || setup.used_at || expired) {
+      res.status(404).json({ message: 'Password setup link is invalid or expired' });
+      return;
+    }
+
+    res.json({
+      user: {
+        email: setup.email,
+        displayName: setup.display_name
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/api/auth/password-setup/:token', async (req, res, next) => {
+  try {
+    const password = String(req.body.password ?? '');
+
+    if (password.length < 8) {
+      res.status(400).json({ message: 'Password must have at least 8 characters' });
+      return;
+    }
+
+    const tokenHash = hashSetupToken(String(req.params.token));
+    const setup = await findPasswordSetupToken(tokenHash);
+    const expired = setup ? new Date(setup.expires_at).getTime() < Date.now() : true;
+
+    if (!setup || setup.used_at || expired) {
+      res.status(404).json({ message: 'Password setup link is invalid or expired' });
+      return;
+    }
+
+    await completePasswordSetup({
+      tokenId: setup.id,
+      userId: setup.user_id,
+      passwordHash: hashPassword(password)
+    });
+
+    res.json({ success: true });
   } catch (error) {
     next(error);
   }
@@ -48,6 +112,133 @@ app.get('/api/platform/modules', authenticate, async (req, res, next) => {
     next(error);
   }
 });
+
+app.get(
+  '/api/platform/users',
+  authenticate,
+  requirePermission('platform.users.read'),
+  async (_req, res, next) => {
+    try {
+      const users = await listPlatformUsers();
+      res.json({ users });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+app.get(
+  '/api/platform/roles',
+  authenticate,
+  requirePermission('platform.users.manage'),
+  async (_req, res, next) => {
+    try {
+      const roles = await listPlatformRoles();
+      res.json({ roles });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+app.post(
+  '/api/platform/users',
+  authenticate,
+  requirePermission('platform.users.manage'),
+  async (req, res, next) => {
+    try {
+      const email = String(req.body.email ?? '').trim().toLowerCase();
+      const displayName = String(req.body.displayName ?? '').trim();
+      const locale = req.body.locale === 'en' ? 'en' : 'sk';
+      const roleCodes = Array.isArray(req.body.roleCodes)
+        ? (req.body.roleCodes as unknown[]).map((role) => String(role))
+        : ['admin'];
+
+      if (!email || !displayName) {
+        res.status(400).json({ message: 'Email and display name are required' });
+        return;
+      }
+
+      const user = await createPlatformUser({ email, displayName, locale, roleCodes });
+      const setupToken = createSetupToken();
+      const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 7);
+
+      await createPasswordSetupToken({
+        userId: user.id,
+        tokenHash: hashSetupToken(setupToken),
+        expiresAt
+      });
+
+      res.status(201).json({
+        user,
+        setupUrl: `${config.webBaseUrl}/setup-password?token=${setupToken}`,
+        expiresAt: expiresAt.toISOString()
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+app.patch(
+  '/api/platform/users/:userId',
+  authenticate,
+  requirePermission('platform.users.manage'),
+  async (req, res, next) => {
+    try {
+      const userId = String(req.params.userId);
+      const displayName = String(req.body.displayName ?? '').trim();
+      const locale = req.body.locale === 'en' ? 'en' : 'sk';
+      const active = Boolean(req.body.active);
+      const roleCodes = Array.isArray(req.body.roleCodes)
+        ? (req.body.roleCodes as unknown[]).map((role) => String(role))
+        : [];
+
+      if (!displayName) {
+        res.status(400).json({ message: 'Display name is required' });
+        return;
+      }
+
+      const updated = await updatePlatformUser({ id: userId, displayName, locale, active, roleCodes });
+
+      if (!updated) {
+        res.status(404).json({ message: 'User not found' });
+        return;
+      }
+
+      res.json({ success: true });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+app.delete(
+  '/api/platform/users/:userId',
+  authenticate,
+  requirePermission('platform.users.manage'),
+  async (req, res, next) => {
+    try {
+      const userId = String(req.params.userId);
+
+      if (req.user?.id === userId) {
+        res.status(400).json({ message: 'You cannot delete your own account' });
+        return;
+      }
+
+      const deleted = await deletePlatformUser(userId);
+
+      if (!deleted) {
+        res.status(404).json({ message: 'User not found' });
+        return;
+      }
+
+      res.json({ success: true });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
 
 app.use('/api/modules/:moduleCode', authenticate, async (req, res, next) => {
   try {

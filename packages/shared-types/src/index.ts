@@ -1,6 +1,8 @@
 export type PermissionCode =
   | 'platform.modules.read'
   | 'platform.modules.manage'
+  | 'platform.users.read'
+  | 'platform.users.manage'
   | 'tenders.read'
   | 'tenders.create'
   | 'tenders.update'
@@ -33,3 +35,19 @@ export interface LoginResponse {
 }
 
 export type Locale = 'sk' | 'en';
+
+export interface PlatformRole {
+  code: string;
+  name: string;
+}
+
+export interface PlatformUser {
+  id: string;
+  email: string;
+  displayName: string;
+  locale: Locale;
+  active: boolean;
+  passwordSet: boolean;
+  roles: PlatformRole[];
+  createdAt: string;
+}

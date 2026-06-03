@@ -28,6 +28,7 @@ services:
       PORT: ${GATEWAY_PORT:-3000}
       DATABASE_URL: ${DATABASE_URL:-postgresql://admin_flow:admin_flow@postgres:5432/admin_flow}
       JWT_SECRET: ${JWT_SECRET:-replace-in-real-environments}
+      WEB_BASE_URL: ${WEB_BASE_URL:-http://localhost:5173}
     ports:
       - "3000:3000"
     depends_on:

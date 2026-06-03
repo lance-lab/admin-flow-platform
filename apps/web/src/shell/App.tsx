@@ -1,10 +1,10 @@
-import { BriefcaseBusiness, LayoutDashboard, LogOut, ShieldCheck } from 'lucide-react';
+import { BriefcaseBusiness, LayoutDashboard, LogOut, ShieldCheck, Users } from 'lucide-react';
 import { Navigate, NavLink, Outlet } from 'react-router-dom';
 import { AuthProvider, useAuth } from './auth';
 import { useI18n } from '../i18n/I18nProvider';
 
 function Shell() {
-  const { user, modules, loading, signOut } = useAuth();
+  const { user, modules, loading, signOut, hasPermission } = useAuth();
   const { locale, locales, setLocale, t } = useI18n();
 
   if (loading) {
@@ -28,6 +28,12 @@ function Shell() {
             <LayoutDashboard aria-hidden="true" />
             {t('nav.dashboard')}
           </NavLink>
+          {hasPermission('platform.users.read') ? (
+            <NavLink to="/users">
+              <Users aria-hidden="true" />
+              {t('nav.users')}
+            </NavLink>
+          ) : null}
           {modules.map((module) => (
             <NavLink key={module.code} to={module.routePath}>
               <BriefcaseBusiness aria-hidden="true" />
