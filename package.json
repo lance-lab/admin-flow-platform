@@ -1,0 +1,22 @@
+{
+  "name": "admin-flow-platform",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Modular admin flow platform with React, Node.js gateway, FastAPI modules, and PostgreSQL.",
+  "workspaces": [
+    "apps/*",
+    "modules/*/frontend",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "docker compose up --build",
+    "dev:web": "npm --workspace apps/web run dev",
+    "dev:gateway": "npm --workspace apps/gateway run dev",
+    "build": "npm --workspace apps/web run build && npm --workspace apps/gateway run build",
+    "lint": "npm --workspace apps/web run lint && npm --workspace apps/gateway run lint",
+    "typecheck": "npm --workspace apps/web run typecheck && npm --workspace apps/gateway run typecheck"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
