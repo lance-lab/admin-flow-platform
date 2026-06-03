@@ -55,6 +55,17 @@ export async function getModules(locale: Locale) {
   return request<{ modules: PlatformModule[] }>(`/api/platform/modules?locale=${locale}`);
 }
 
+export async function getPlatformHealth(locale: Locale) {
+  return request<{
+    services: Array<{
+      code: string;
+      name: string;
+      status: 'ok' | 'error';
+      detail: string;
+    }>;
+  }>(`/api/platform/health?locale=${locale}`);
+}
+
 export async function getUsers() {
   return request<{ users: PlatformUser[] }>('/api/platform/users');
 }

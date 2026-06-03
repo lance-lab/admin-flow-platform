@@ -1,6 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { createBrowserRouter, RouterProvider } from 'react-router-dom';
+import { createBrowserRouter, Navigate, RouterProvider } from 'react-router-dom';
 import { App } from './shell/App';
 import { Dashboard } from './shell/Dashboard';
 import { Login } from './shell/Login';
@@ -16,6 +16,13 @@ const moduleRoutes = registeredModules.map(({ Component, routePath }) => ({
   element: <Component />
 }));
 
+function WorkspaceRedirect() {
+  const workspace = window.localStorage.getItem('admin-flow-workspace');
+  const module = registeredModules.find((registeredModule) => workspace === `module:${registeredModule.code}`);
+
+  return <Navigate to={module?.routePath ?? '/admin'} replace />;
+}
+
 const router = createBrowserRouter([
   {
     path: '/login',
@@ -29,8 +36,10 @@ const router = createBrowserRouter([
     path: '/',
     element: <App />,
     children: [
-      { index: true, element: <Dashboard /> },
-      { path: 'users', element: <Users /> },
+      { index: true, element: <WorkspaceRedirect /> },
+      { path: 'admin', element: <Dashboard /> },
+      { path: 'admin/users', element: <Users /> },
+      { path: 'users', element: <Navigate to="/admin/users" replace /> },
       ...moduleRoutes
     ]
   }

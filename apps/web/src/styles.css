@@ -163,6 +163,30 @@ select {
   margin-top: 32px;
 }
 
+.workspace-switcher {
+  display: grid;
+  gap: 8px;
+  margin-top: 28px;
+}
+
+.workspace-switcher span {
+  color: #657477;
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.workspace-switcher select {
+  min-height: 42px;
+  width: 100%;
+  border: 1px solid #c9d5d1;
+  border-radius: 6px;
+  padding: 0 12px;
+  background: #ffffff;
+  color: #243033;
+  font-weight: 850;
+}
+
 .nav-list a {
   display: flex;
   align-items: center;
@@ -254,14 +278,16 @@ select {
 }
 
 .module-grid,
-.tenders-actions {
+.tenders-actions,
+.health-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
   gap: 16px;
 }
 
 .module-card,
-.action-panel {
+.action-panel,
+.health-card {
   min-height: 150px;
   padding: 20px;
   border: 1px solid #dfe7e3;
@@ -270,16 +296,38 @@ select {
 }
 
 .module-card h2,
-.action-panel h2 {
+.action-panel h2,
+.health-card h2 {
   margin: 8px 0;
   font-size: 20px;
 }
 
 .module-card p,
-.action-panel p {
+.action-panel p,
+.health-card p {
   margin: 0;
   color: #4b5a5d;
   line-height: 1.5;
+}
+
+.health-card {
+  display: flex;
+  gap: 14px;
+  min-height: 126px;
+}
+
+.health-card svg {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+}
+
+.health-card.ok svg {
+  color: #1f7a4f;
+}
+
+.health-card.error svg {
+  color: #a13d24;
 }
 
 .status-row {

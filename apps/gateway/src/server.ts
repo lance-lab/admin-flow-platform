@@ -13,6 +13,7 @@ import {
   findPasswordSetupToken,
   findUserByEmail,
   findUserPasswordHashByEmail,
+  listEnabledModules,
   listPlatformRoles,
   listPlatformUsers,
   listEnabledModulesForPermissions,
@@ -108,6 +109,45 @@ app.get('/api/platform/modules', authenticate, async (req, res, next) => {
     const locale = String(req.query.locale ?? req.user?.locale ?? 'sk');
     const modules = await listEnabledModulesForPermissions(req.user?.permissions ?? [], locale);
     res.json({ modules });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/platform/health', authenticate, requirePermission('platform.modules.read'), async (req, res, next) => {
+  try {
+    const locale = String(req.query.locale ?? req.user?.locale ?? 'sk');
+    const modules = await listEnabledModules(locale);
+    const moduleChecks = await Promise.all(
+      modules.map(async (module) => {
+        try {
+          const response = await fetch(`${module.backendBaseUrl}/health`, {
+            signal: AbortSignal.timeout(2000)
+          });
+          return {
+            code: module.code,
+            name: module.name,
+            status: response.ok ? 'ok' : 'error',
+            detail: response.ok ? 'Reachable' : `HTTP ${response.status}`
+          };
+        } catch {
+          return {
+            code: module.code,
+            name: module.name,
+            status: 'error',
+            detail: 'Unreachable'
+          };
+        }
+      })
+    );
+
+    res.json({
+      services: [
+        { code: 'gateway', name: 'Gateway API', status: 'ok', detail: 'Reachable' },
+        { code: 'postgres', name: 'PostgreSQL', status: 'ok', detail: 'Connected' },
+        ...moduleChecks
+      ]
+    });
   } catch (error) {
     next(error);
   }

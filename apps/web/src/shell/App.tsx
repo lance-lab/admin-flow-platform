@@ -1,11 +1,24 @@
+import { useEffect } from 'react';
 import { BriefcaseBusiness, LayoutDashboard, LogOut, ShieldCheck, Users } from 'lucide-react';
-import { Navigate, NavLink, Outlet } from 'react-router-dom';
+import { Navigate, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './auth';
 import { useI18n } from '../i18n/I18nProvider';
+
+const WORKSPACE_KEY = 'admin-flow-workspace';
 
 function Shell() {
   const { user, modules, loading, signOut, hasPermission } = useAuth();
   const { locale, locales, setLocale, t } = useI18n();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const activeModule = modules.find((module) => location.pathname.startsWith(module.routePath));
+  const activeWorkspace = activeModule ? `module:${activeModule.code}` : 'platform';
+
+  useEffect(() => {
+    if (!loading && user) {
+      window.localStorage.setItem(WORKSPACE_KEY, activeWorkspace);
+    }
+  }, [activeWorkspace, loading, user]);
 
   if (loading) {
     return <main className="center-screen">{t('shell.loading')}</main>;
@@ -13,6 +26,19 @@ function Shell() {
 
   if (!user) {
     return <Navigate to="/login" replace />;
+  }
+
+  function switchWorkspace(workspace: string) {
+    window.localStorage.setItem(WORKSPACE_KEY, workspace);
+
+    if (workspace === 'platform') {
+      navigate('/admin');
+      return;
+    }
+
+    const moduleCode = workspace.replace('module:', '');
+    const module = modules.find((availableModule) => availableModule.code === moduleCode);
+    navigate(module?.routePath ?? '/admin');
   }
 
   return (
@@ -23,23 +49,40 @@ function Shell() {
           <span>{t('app.brand')}</span>
         </div>
 
+        <label className="workspace-switcher">
+          <span>{t('workspace.label')}</span>
+          <select value={activeWorkspace} onChange={(event) => switchWorkspace(event.target.value)}>
+            <option value="platform">{t('workspace.platform')}</option>
+            {modules.map((module) => (
+              <option key={module.code} value={`module:${module.code}`}>
+                {module.name}
+              </option>
+            ))}
+          </select>
+        </label>
+
         <nav className="nav-list" aria-label="Main navigation">
-          <NavLink to="/" end>
-            <LayoutDashboard aria-hidden="true" />
-            {t('nav.dashboard')}
-          </NavLink>
-          {hasPermission('platform.users.read') ? (
-            <NavLink to="/users">
-              <Users aria-hidden="true" />
-              {t('nav.users')}
-            </NavLink>
-          ) : null}
-          {modules.map((module) => (
-            <NavLink key={module.code} to={module.routePath}>
-              <BriefcaseBusiness aria-hidden="true" />
-              {module.name}
-            </NavLink>
-          ))}
+          {activeWorkspace === 'platform' ? (
+            <>
+              <NavLink to="/admin" end>
+                <LayoutDashboard aria-hidden="true" />
+                {t('nav.dashboard')}
+              </NavLink>
+              {hasPermission('platform.users.read') ? (
+                <NavLink to="/admin/users">
+                  <Users aria-hidden="true" />
+                  {t('nav.users')}
+                </NavLink>
+              ) : null}
+            </>
+          ) : (
+            activeModule ? (
+              <NavLink to={activeModule.routePath}>
+                <BriefcaseBusiness aria-hidden="true" />
+                {t('nav.dashboard')}
+              </NavLink>
+            ) : null
+          )}
         </nav>
       </aside>
 

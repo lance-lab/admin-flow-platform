@@ -131,6 +131,37 @@ export async function findEnabledModuleByCode(code: string) {
   };
 }
 
+export async function listEnabledModules(locale: string) {
+  const rows = await query<ModuleRow>(
+    `
+    SELECT
+      m.code,
+      COALESCE(mt.name, m.name) AS name,
+      COALESCE(mt.description, m.description) AS description,
+      m.route_path,
+      m.backend_base_url,
+      m.required_permission,
+      m.enabled
+    FROM platform.modules m
+    LEFT JOIN platform.module_translations mt
+      ON mt.module_code = m.code AND mt.locale = $1
+    WHERE m.enabled = TRUE
+    ORDER BY COALESCE(mt.name, m.name) ASC
+    `,
+    [locale]
+  );
+
+  return rows.map((row) => ({
+    code: row.code,
+    name: row.name,
+    description: row.description,
+    routePath: row.route_path,
+    backendBaseUrl: row.backend_base_url,
+    requiredPermission: row.required_permission,
+    enabled: row.enabled
+  }));
+}
+
 export async function listPlatformUsers() {
   const rows = await query<UserRow>(
     `
