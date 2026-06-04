@@ -2,11 +2,12 @@ from typing import Annotated
 from uuid import UUID
 
 import psycopg
-from fastapi import FastAPI, HTTPException, Path, status
+from fastapi import FastAPI, HTTPException, Path, Query, status
 from psycopg.rows import dict_row
 from pydantic import BaseModel, Field
 
 from .config import settings
+from .company_resolver import OrganizationResponse, resolve_company_by_ico
 
 app = FastAPI(title="Companies Module API", version="0.1.0")
 
@@ -140,6 +141,14 @@ def create_company(input_data: CompanyInput) -> dict[str, object]:
             raise HTTPException(status_code=409, detail="Company ICO already exists") from error
 
     return {"company": company}
+
+
+@app.get("/api/companies/resolve/{identification_number}")
+def resolve_company(
+    identification_number: str,
+    country: str = Query("SK"),
+) -> OrganizationResponse:
+    return resolve_company_by_ico(identification_number, country)
 
 
 @app.get("/api/companies/{company_id}")

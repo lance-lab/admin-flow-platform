@@ -73,6 +73,25 @@ export interface BankAccountInput {
   preferred: boolean;
 }
 
+export interface ResolvedBankAccount {
+  Ucet: string;
+  Banka: string | null;
+}
+
+export interface ResolvedCompany {
+  Ico: string;
+  Meno: string;
+  Dic: string | null;
+  IcDph: string | null;
+  PlnaAdresa: string | null;
+  Mesto: string | null;
+  Ulica: string | null;
+  CisloDomu: string | null;
+  Stat: string | null;
+  Psc: string | null;
+  BankoveUcty: ResolvedBankAccount[];
+}
+
 export function getCompaniesOverview() {
   return request<CompaniesOverview>('/api/modules/companies/overview');
 }
@@ -86,6 +105,12 @@ export function createCompany(input: CompanyInput) {
     method: 'POST',
     body: JSON.stringify(input)
   });
+}
+
+export function resolveCompanyByIco(ico: string, country: string) {
+  return request<ResolvedCompany>(
+    `/api/modules/companies/companies/resolve/${encodeURIComponent(ico)}?country=${encodeURIComponent(country)}`
+  );
 }
 
 export function deleteCompany(companyId: string) {

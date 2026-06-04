@@ -9,11 +9,13 @@ import {
   deleteCompany,
   getCompany,
   listCompanies,
+  resolveCompanyByIco,
   type CompanyDetail,
+  type ResolvedBankAccount,
   type CompanySummary
 } from './api';
 
-type PanelMode = 'closed' | 'company' | 'contact' | 'bankAccount';
+type PanelMode = 'closed' | 'detail' | 'company' | 'contact' | 'bankAccount';
 
 function emptyToNull(value: string) {
   const trimmed = value.trim();
@@ -30,6 +32,16 @@ function formatAddress(company: CompanySummary | CompanyDetail) {
     .join(', ');
 }
 
+function countryCode(value: string | null) {
+  const normalized = (value ?? '').trim().toLowerCase();
+
+  if (normalized.includes('česk') || normalized.includes('cesk') || normalized === 'cz') {
+    return 'CZ';
+  }
+
+  return 'SK';
+}
+
 export function CompaniesModule() {
   const { t } = useI18n();
   const { confirm, notify } = useNotifications();
@@ -38,6 +50,8 @@ export function CompaniesModule() {
   const [selectedCompany, setSelectedCompany] = useState<CompanyDetail | null>(null);
   const [panelMode, setPanelMode] = useState<PanelMode>('closed');
   const [submitting, setSubmitting] = useState(false);
+  const [resolvingIco, setResolvingIco] = useState(false);
+  const [resolvedBankAccounts, setResolvedBankAccounts] = useState<ResolvedBankAccount[]>([]);
 
   const [companyName, setCompanyName] = useState('');
   const [ico, setIco] = useState('');
@@ -89,6 +103,7 @@ export function CompaniesModule() {
     setSelectedCompanyId(companyId);
     const { company } = await getCompany(companyId);
     setSelectedCompany(company);
+    setPanelMode('detail');
   }
 
   function closePanel() {
@@ -105,6 +120,7 @@ export function CompaniesModule() {
     setAddressCity('');
     setAddressCountry('SK');
     setAddressPostalCode('');
+    setResolvedBankAccounts([]);
   }
 
   function resetContactForm() {
@@ -141,13 +157,50 @@ export function CompaniesModule() {
       });
 
       notify({ type: 'success', message: t('companies.created') });
+      for (const bankAccount of resolvedBankAccounts) {
+        await createBankAccount(company.id, {
+          bank_account_number: bankAccount.Ucet,
+          bank_code: emptyToNull(bankAccount.Banka ?? ''),
+          preferred: false
+        });
+      }
       resetCompanyForm();
-      closePanel();
       await loadCompanies(company.id);
+      setPanelMode('detail');
     } catch {
       notify({ type: 'error', message: t('companies.createError') });
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function handleResolveCompany() {
+    const normalizedIco = ico.trim();
+
+    if (!normalizedIco) {
+      notify({ type: 'error', message: t('companies.resolveMissingIco') });
+      return;
+    }
+
+    setResolvingIco(true);
+
+    try {
+      const resolved = await resolveCompanyByIco(normalizedIco, addressCountry || 'SK');
+      setCompanyName(resolved.Meno ?? '');
+      setIco(resolved.Ico ?? normalizedIco);
+      setDic(resolved.Dic ?? '');
+      setIcDph(resolved.IcDph ?? '');
+      setAddressStreet(resolved.Ulica ?? '');
+      setAddressNumber(resolved.CisloDomu ?? '');
+      setAddressCity(resolved.Mesto ?? '');
+      setAddressCountry(countryCode(resolved.Stat));
+      setAddressPostalCode(resolved.Psc ?? '');
+      setResolvedBankAccounts(resolved.BankoveUcty ?? []);
+      notify({ type: 'success', message: t('companies.resolved') });
+    } catch {
+      notify({ type: 'error', message: t('companies.resolveError') });
+    } finally {
+      setResolvingIco(false);
     }
   }
 
@@ -173,8 +226,8 @@ export function CompaniesModule() {
 
       notify({ type: 'success', message: t('companies.contactCreated') });
       resetContactForm();
-      closePanel();
       await loadCompanies(selectedCompanyId);
+      setPanelMode('detail');
     } catch {
       notify({ type: 'error', message: t('companies.contactCreateError') });
     } finally {
@@ -200,8 +253,8 @@ export function CompaniesModule() {
 
       notify({ type: 'success', message: t('companies.bankAccountCreated') });
       resetBankAccountForm();
-      closePanel();
       await loadCompanies(selectedCompanyId);
+      setPanelMode('detail');
     } catch {
       notify({ type: 'error', message: t('companies.bankAccountCreateError') });
     } finally {
@@ -228,6 +281,7 @@ export function CompaniesModule() {
       notify({ type: 'success', message: t('companies.deleted') });
       setSelectedCompanyId(null);
       setSelectedCompany(null);
+      closePanel();
       await loadCompanies(null);
     } catch {
       notify({ type: 'error', message: t('companies.deleteError') });
@@ -249,52 +303,60 @@ export function CompaniesModule() {
         </button>
       </section>
 
-      <section className="companies-layout">
-        <section className="data-table-wrap">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>{t('companies.name')}</th>
-                <th>{t('companies.ico')}</th>
-                <th>{t('companies.city')}</th>
-                <th>{t('companies.contacts')}</th>
-                <th>{t('companies.bankAccounts')}</th>
+      <section className="data-table-wrap">
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>{t('companies.name')}</th>
+              <th>{t('companies.ico')}</th>
+              <th>{t('companies.city')}</th>
+              <th>{t('companies.contacts')}</th>
+              <th>{t('companies.bankAccounts')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {companies.map((company) => (
+              <tr
+                className={company.id === selectedCompanyId ? 'selected-row' : undefined}
+                key={company.id}
+                onClick={() => void selectCompany(company.id)}
+              >
+                <td>
+                  <strong>{company.name}</strong>
+                </td>
+                <td>{company.ico ?? '-'}</td>
+                <td>{company.addressCity ?? '-'}</td>
+                <td>{company.contactCount}</td>
+                <td>{company.bankAccountCount}</td>
               </tr>
-            </thead>
-            <tbody>
-              {companies.map((company) => (
-                <tr
-                  className={company.id === selectedCompanyId ? 'selected-row' : undefined}
-                  key={company.id}
-                  onClick={() => void selectCompany(company.id)}
-                >
-                  <td>
-                    <strong>{company.name}</strong>
-                  </td>
-                  <td>{company.ico ?? '-'}</td>
-                  <td>{company.addressCity ?? '-'}</td>
-                  <td>{company.contactCount}</td>
-                  <td>{company.bankAccountCount}</td>
-                </tr>
-              ))}
-              {companies.length === 0 ? (
-                <tr>
-                  <td colSpan={5}>{t('companies.empty')}</td>
-                </tr>
-              ) : null}
-            </tbody>
-          </table>
-        </section>
+            ))}
+            {companies.length === 0 ? (
+              <tr>
+                <td colSpan={5}>{t('companies.empty')}</td>
+              </tr>
+            ) : null}
+          </tbody>
+        </table>
+      </section>
 
-        <aside className="detail-panel">
-          {selectedCompany ? (
-            <>
-              <div className="detail-heading">
-                <Building2 aria-hidden="true" />
-                <div>
-                  <span className="eyebrow">{t('companies.selected')}</span>
-                  <h2>{selectedCompany.name}</h2>
+      {panelMode !== 'closed' ? (
+        <aside
+          className={panelMode === 'detail' ? 'side-panel detail-side-panel' : 'side-panel'}
+          aria-label={t(`companies.panel.${panelMode}`)}
+        >
+          {panelMode === 'detail' && selectedCompany ? (
+            <div className="side-panel-form">
+              <div className="panel-heading">
+                <div className="detail-heading">
+                  <Building2 aria-hidden="true" />
+                  <div>
+                    <span className="eyebrow">{t('companies.selected')}</span>
+                    <h2>{selectedCompany.name}</h2>
+                  </div>
                 </div>
+                <button className="icon-text-button" type="button" onClick={closePanel}>
+                  {t('companies.cancel')}
+                </button>
               </div>
               <div className="row-actions">
                 <button
@@ -345,7 +407,9 @@ export function CompaniesModule() {
                       {contact.preferred ? <span className="mini-pill">{t('companies.preferred')}</span> : null}
                     </article>
                   ))}
-                  {selectedCompany.contacts.length === 0 ? <p className="helper-text">{t('companies.noContacts')}</p> : null}
+                  {selectedCompany.contacts.length === 0 ? (
+                    <p className="helper-text">{t('companies.noContacts')}</p>
+                  ) : null}
                 </div>
               </section>
 
@@ -370,15 +434,9 @@ export function CompaniesModule() {
                   ) : null}
                 </div>
               </section>
-            </>
-          ) : (
-            <p className="helper-text">{t('companies.selectEmpty')}</p>
-          )}
-        </aside>
-      </section>
+            </div>
+          ) : null}
 
-      {panelMode !== 'closed' ? (
-        <aside className="side-panel" aria-label={t(`companies.panel.${panelMode}`)}>
           {panelMode === 'company' ? (
             <form className="side-panel-form" onSubmit={handleCreateCompany}>
               <div className="panel-heading">
@@ -409,6 +467,14 @@ export function CompaniesModule() {
                   <input value={addressCountry} onChange={(event) => setAddressCountry(event.target.value)} />
                 </label>
               </div>
+              <button
+                className="icon-text-button"
+                disabled={resolvingIco || !ico.trim()}
+                type="button"
+                onClick={() => void handleResolveCompany()}
+              >
+                {resolvingIco ? t('companies.resolving') : t('companies.resolveByIco')}
+              </button>
               <label>
                 {t('companies.street')}
                 <input value={addressStreet} onChange={(event) => setAddressStreet(event.target.value)} />
@@ -427,6 +493,17 @@ export function CompaniesModule() {
                 {t('companies.city')}
                 <input value={addressCity} onChange={(event) => setAddressCity(event.target.value)} />
               </label>
+              {resolvedBankAccounts.length > 0 ? (
+                <section className="compact-list">
+                  <span className="eyebrow">{t('companies.resolvedBankAccounts')}</span>
+                  {resolvedBankAccounts.map((account) => (
+                    <article className="compact-item" key={`${account.Ucet}-${account.Banka ?? ''}`}>
+                      <strong>{account.Ucet}</strong>
+                      <span>{account.Banka ?? '-'}</span>
+                    </article>
+                  ))}
+                </section>
+              ) : null}
               <button className="primary-button" disabled={submitting} type="submit">
                 {t('companies.create')}
               </button>

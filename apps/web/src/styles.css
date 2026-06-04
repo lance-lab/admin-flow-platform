@@ -561,6 +561,10 @@ select {
   box-shadow: -18px 0 48px rgba(24, 32, 35, 0.14);
 }
 
+.detail-side-panel {
+  width: min(560px, calc(100vw - 24px));
+}
+
 .side-panel-form {
   display: grid;
   gap: 16px;
