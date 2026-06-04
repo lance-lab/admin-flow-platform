@@ -16,6 +16,7 @@ services:
       - ./modules/companies/infra/postgres/011_companies_seed.sql:/docker-entrypoint-initdb.d/011_companies_seed.sql:ro
       - ./modules/tenders/infra/postgres/010_tenders_schema.sql:/docker-entrypoint-initdb.d/020_tenders_schema.sql:ro
       - ./modules/tenders/infra/postgres/011_tenders_seed.sql:/docker-entrypoint-initdb.d/021_tenders_seed.sql:ro
+      - ./modules/companies/infra/postgres/022_companies_cleanup.sql:/docker-entrypoint-initdb.d/022_companies_cleanup.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s

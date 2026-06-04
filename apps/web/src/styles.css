@@ -246,9 +246,23 @@ select {
 
 .icon-text-button svg,
 .primary-button svg,
+.icon-only-button svg,
 .nav-list svg {
   width: 18px;
   height: 18px;
+}
+
+.icon-only-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 6px;
+  background: #edf2f0;
+  color: #243033;
+  cursor: pointer;
 }
 
 .page {
@@ -536,6 +550,32 @@ select {
   gap: 12px;
 }
 
+.segmented-control {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid #d8e2de;
+  border-radius: 8px;
+  background: #edf2f0;
+}
+
+.segmented-control button {
+  min-height: 38px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #4b5a5d;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.segmented-control button.active {
+  background: #ffffff;
+  color: #0c5460;
+  box-shadow: 0 1px 4px rgba(24, 32, 35, 0.08);
+}
+
 .checkbox-row {
   display: flex;
   grid-template-columns: none;
@@ -574,6 +614,23 @@ select {
 .side-panel h2 {
   margin: 0;
   font-size: 22px;
+}
+
+.draft-section {
+  display: grid;
+  gap: 12px;
+  padding-top: 14px;
+  border-top: 1px solid #e1e9e6;
+}
+
+.draft-section:first-of-type {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.draft-item {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
 }
 
 .notification-stack {

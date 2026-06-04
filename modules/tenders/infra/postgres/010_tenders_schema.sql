@@ -62,7 +62,7 @@ CREATE TABLE IF NOT EXISTS tenders.procurement_contracts (
   project_code TEXT,
   cpv_code TEXT,
   contract_type TEXT,
-  responsible_person_id UUID REFERENCES companies.persons(id) ON DELETE SET NULL,
+  responsible_contact_id UUID REFERENCES companies.company_persons(id) ON DELETE SET NULL,
   delivery_address_street_number TEXT,
   delivery_address_postal_code TEXT,
   delivery_address_city TEXT,
@@ -85,19 +85,63 @@ CREATE TABLE IF NOT EXISTS tenders.tender_companies (
   tender_id UUID NOT NULL REFERENCES tenders.tenders(id) ON DELETE CASCADE,
   company_id UUID NOT NULL REFERENCES companies.companies(id) ON DELETE CASCADE,
   role tenders.tender_company_role NOT NULL,
-  contact_person_id UUID,
+  contact_person_id UUID REFERENCES companies.company_persons(id) ON DELETE SET NULL,
   bank_account_id UUID,
   is_primary BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   CONSTRAINT tender_companies_tender_company_role_unique UNIQUE (tender_id, company_id, role),
-  CONSTRAINT tender_companies_contact_person_belongs_to_company
-    FOREIGN KEY (company_id, contact_person_id)
-    REFERENCES companies.company_persons(company_id, person_id),
   CONSTRAINT tender_companies_bank_account_belongs_to_company
     FOREIGN KEY (company_id, bank_account_id)
     REFERENCES companies.company_bank_accounts(company_id, id)
 );
+
+ALTER TABLE tenders.procurement_contracts
+  ADD COLUMN IF NOT EXISTS responsible_contact_id UUID REFERENCES companies.company_persons(id) ON DELETE SET NULL;
+
+ALTER TABLE tenders.procurement_contracts
+  DROP COLUMN IF EXISTS responsible_person_id;
+
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'tender_companies_contact_person_belongs_to_company'
+      AND conrelid = 'tenders.tender_companies'::regclass
+  ) THEN
+    ALTER TABLE tenders.tender_companies
+      DROP CONSTRAINT tender_companies_contact_person_belongs_to_company;
+  END IF;
+END $$;
+
+ALTER TABLE tenders.tender_companies
+  ADD COLUMN IF NOT EXISTS contact_person_id UUID;
+
+UPDATE tenders.tender_companies tc
+SET contact_person_id = NULL
+WHERE contact_person_id IS NOT NULL
+  AND NOT EXISTS (
+    SELECT 1
+    FROM companies.company_persons cp
+    WHERE cp.id = tc.contact_person_id
+  );
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'tender_companies_contact_person_id_fkey'
+      AND conrelid = 'tenders.tender_companies'::regclass
+  ) THEN
+    ALTER TABLE tenders.tender_companies
+      ADD CONSTRAINT tender_companies_contact_person_id_fkey
+      FOREIGN KEY (contact_person_id)
+      REFERENCES companies.company_persons(id)
+      ON DELETE SET NULL;
+  END IF;
+END $$;
 
 CREATE INDEX IF NOT EXISTS tenders_tenders_type_idx ON tenders.tenders (type);
 CREATE INDEX IF NOT EXISTS tenders_measures_tender_id_idx ON tenders.measures (tender_id);

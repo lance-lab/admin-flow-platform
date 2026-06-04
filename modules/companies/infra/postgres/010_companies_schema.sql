@@ -1,16 +1,5 @@
 CREATE SCHEMA IF NOT EXISTS companies;
 
-CREATE TABLE IF NOT EXISTS companies.persons (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name TEXT NOT NULL,
-  surname TEXT NOT NULL,
-  email TEXT,
-  phone_number TEXT,
-  date_of_birth DATE,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
 CREATE TABLE IF NOT EXISTS companies.companies (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
@@ -30,13 +19,90 @@ CREATE TABLE IF NOT EXISTS companies.companies (
 CREATE TABLE IF NOT EXISTS companies.company_persons (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   company_id UUID NOT NULL REFERENCES companies.companies(id) ON DELETE CASCADE,
-  person_id UUID NOT NULL REFERENCES companies.persons(id) ON DELETE CASCADE,
+  name TEXT,
+  surname TEXT,
+  email TEXT,
+  phone_number TEXT,
+  date_of_birth DATE,
   role TEXT,
   preferred BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  CONSTRAINT company_persons_company_person_unique UNIQUE (company_id, person_id)
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+ALTER TABLE companies.company_persons
+  ADD COLUMN IF NOT EXISTS name TEXT,
+  ADD COLUMN IF NOT EXISTS surname TEXT,
+  ADD COLUMN IF NOT EXISTS email TEXT,
+  ADD COLUMN IF NOT EXISTS phone_number TEXT,
+  ADD COLUMN IF NOT EXISTS date_of_birth DATE;
+
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'companies'
+      AND table_name = 'company_persons'
+      AND column_name = 'person_id'
+  ) AND to_regclass('companies.persons') IS NOT NULL THEN
+    UPDATE companies.company_persons cp
+    SET
+      name = COALESCE(cp.name, p.name),
+      surname = COALESCE(cp.surname, p.surname),
+      email = COALESCE(cp.email, p.email),
+      phone_number = COALESCE(cp.phone_number, p.phone_number),
+      date_of_birth = COALESCE(cp.date_of_birth, p.date_of_birth)
+    FROM companies.persons p
+    WHERE cp.person_id = p.id;
+  END IF;
+END $$;
+
+UPDATE companies.company_persons
+SET
+  name = COALESCE(name, ''),
+  surname = COALESCE(surname, '');
+
+ALTER TABLE companies.company_persons
+  ALTER COLUMN name SET NOT NULL,
+  ALTER COLUMN surname SET NOT NULL;
+
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'companies'
+      AND table_name = 'company_persons'
+      AND column_name = 'person_id'
+  ) THEN
+    ALTER TABLE companies.company_persons
+      ALTER COLUMN person_id DROP NOT NULL;
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF to_regclass('tenders.tender_companies') IS NOT NULL AND EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'tender_companies_contact_person_belongs_to_company'
+      AND conrelid = 'tenders.tender_companies'::regclass
+  ) THEN
+    ALTER TABLE tenders.tender_companies
+      DROP CONSTRAINT tender_companies_contact_person_belongs_to_company;
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'company_persons_company_person_unique'
+      AND conrelid = 'companies.company_persons'::regclass
+  ) THEN
+    ALTER TABLE companies.company_persons
+      DROP CONSTRAINT company_persons_company_person_unique;
+  END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS companies.company_bank_accounts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -51,7 +117,6 @@ CREATE TABLE IF NOT EXISTS companies.company_bank_accounts (
 
 CREATE INDEX IF NOT EXISTS companies_companies_name_idx ON companies.companies (name);
 CREATE INDEX IF NOT EXISTS companies_companies_ico_idx ON companies.companies (ico);
-CREATE INDEX IF NOT EXISTS companies_persons_email_idx ON companies.persons (email);
+CREATE INDEX IF NOT EXISTS company_persons_email_idx ON companies.company_persons (email);
 CREATE INDEX IF NOT EXISTS company_persons_company_id_idx ON companies.company_persons (company_id);
-CREATE INDEX IF NOT EXISTS company_persons_person_id_idx ON companies.company_persons (person_id);
 CREATE INDEX IF NOT EXISTS company_bank_accounts_company_id_idx ON companies.company_bank_accounts (company_id);

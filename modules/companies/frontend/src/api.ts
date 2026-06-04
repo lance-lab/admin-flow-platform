@@ -23,7 +23,6 @@ export interface CompanySummary {
 
 export interface CompanyContact {
   id: string;
-  personId: string;
   name: string;
   surname: string;
   email: string | null;

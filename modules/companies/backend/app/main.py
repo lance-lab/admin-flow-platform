@@ -180,18 +180,16 @@ def get_company(company_id: CompanyId) -> dict[str, object]:
             """
             SELECT
               cp.id::text AS id,
-              p.id::text AS "personId",
-              p.name,
-              p.surname,
-              p.email,
-              p.phone_number AS "phoneNumber",
-              p.date_of_birth::text AS "dateOfBirth",
+              cp.name,
+              cp.surname,
+              cp.email,
+              cp.phone_number AS "phoneNumber",
+              cp.date_of_birth::text AS "dateOfBirth",
               cp.role,
               cp.preferred
             FROM companies.company_persons cp
-            JOIN companies.persons p ON p.id = cp.person_id
             WHERE cp.company_id = %(company_id)s
-            ORDER BY cp.preferred DESC, p.surname ASC, p.name ASC
+            ORDER BY cp.preferred DESC, cp.surname ASC, cp.name ASC
             """,
             {"company_id": company_id},
         ).fetchall()
@@ -239,36 +237,10 @@ def delete_company(company_id: CompanyId) -> dict[str, bool]:
                 detail="Company is used in tenders and cannot be deleted",
             )
 
-        with conn.transaction():
-            person_rows = conn.execute(
-                """
-                SELECT person_id
-                FROM companies.company_persons
-                WHERE company_id = %(company_id)s
-                """,
-                {"company_id": company_id},
-            ).fetchall()
-
-            person_ids = [row["person_id"] for row in person_rows]
-
-            conn.execute(
-                "DELETE FROM companies.companies WHERE id = %(company_id)s",
-                {"company_id": company_id},
-            )
-
-            if person_ids:
-                conn.execute(
-                    """
-                    DELETE FROM companies.persons p
-                    WHERE p.id = ANY(%(person_ids)s::uuid[])
-                      AND NOT EXISTS (
-                        SELECT 1
-                        FROM companies.company_persons cp
-                        WHERE cp.person_id = p.id
-                      )
-                    """,
-                    {"person_ids": person_ids},
-                )
+        conn.execute(
+            "DELETE FROM companies.companies WHERE id = %(company_id)s",
+            {"company_id": company_id},
+        )
 
     return {"success": True}
 
@@ -284,29 +256,32 @@ def create_contact(company_id: CompanyId, input_data: ContactInput) -> dict[str,
         if not company:
             raise HTTPException(status_code=404, detail="Company not found")
 
-        with conn.transaction():
-            person = conn.execute(
-                """
-                INSERT INTO companies.persons (name, surname, email, phone_number, date_of_birth)
-                VALUES (%(name)s, %(surname)s, %(email)s, %(phone_number)s, %(date_of_birth)s)
-                RETURNING id
-                """,
-                input_data.model_dump(),
-            ).fetchone()
-
-            contact = conn.execute(
-                """
-                INSERT INTO companies.company_persons (company_id, person_id, role, preferred)
-                VALUES (%(company_id)s, %(person_id)s, %(role)s, %(preferred)s)
-                RETURNING id::text AS id
-                """,
-                {
-                    "company_id": company_id,
-                    "person_id": person["id"],
-                    "role": input_data.role,
-                    "preferred": input_data.preferred,
-                },
-            ).fetchone()
+        contact = conn.execute(
+            """
+            INSERT INTO companies.company_persons (
+              company_id,
+              name,
+              surname,
+              email,
+              phone_number,
+              date_of_birth,
+              role,
+              preferred
+            )
+            VALUES (
+              %(company_id)s,
+              %(name)s,
+              %(surname)s,
+              %(email)s,
+              %(phone_number)s,
+              %(date_of_birth)s,
+              %(role)s,
+              %(preferred)s
+            )
+            RETURNING id::text AS id
+            """,
+            {"company_id": company_id, **input_data.model_dump()},
+        ).fetchone()
 
     return {"contact": contact}
 
