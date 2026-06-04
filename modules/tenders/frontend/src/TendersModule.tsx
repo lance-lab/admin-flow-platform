@@ -1,4 +1,4 @@
-import { ClipboardList, FileText, Landmark, Sparkles } from 'lucide-react';
+import { Building2, ClipboardList, FileText, Sparkles } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useI18n, type TranslationKey } from '../../../../apps/web/src/i18n/I18nProvider';
 import { getTendersOverview, type TendersOverview } from './api';
@@ -10,9 +10,9 @@ const placeholders = [
     icon: ClipboardList
   },
   {
-    title: 'tenders.cards.organizations.title',
-    description: 'tenders.cards.organizations.description',
-    icon: Landmark
+    title: 'tenders.cards.companies.title',
+    description: 'tenders.cards.companies.description',
+    icon: Building2
   },
   {
     title: 'tenders.cards.ai.title',

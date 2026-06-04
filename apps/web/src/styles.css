@@ -419,6 +419,135 @@ select {
   text-transform: uppercase;
 }
 
+.data-table tbody tr {
+  cursor: pointer;
+}
+
+.data-table tbody tr:hover,
+.data-table tbody tr.selected-row {
+  background: #eef6f3;
+}
+
+.companies-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(340px, 0.85fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.detail-panel {
+  display: grid;
+  gap: 18px;
+  padding: 20px;
+  border: 1px solid #dfe7e3;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.detail-heading {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.detail-heading svg {
+  width: 28px;
+  height: 28px;
+  color: #0c5460;
+}
+
+.detail-heading h2,
+.detail-section h3 {
+  margin: 0;
+}
+
+.detail-heading h2 {
+  font-size: 24px;
+}
+
+.detail-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+
+.detail-list div {
+  display: grid;
+  grid-template-columns: 90px 1fr;
+  gap: 12px;
+}
+
+.detail-list dt {
+  color: #657477;
+  font-weight: 900;
+}
+
+.detail-list dd {
+  margin: 0;
+  color: #243033;
+}
+
+.detail-section {
+  display: grid;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid #e8eeeb;
+}
+
+.section-heading-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.compact-list {
+  display: grid;
+  gap: 10px;
+}
+
+.compact-item {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid #e1e9e6;
+  border-radius: 8px;
+  background: #fbfcfc;
+}
+
+.compact-item span {
+  color: #4b5a5d;
+}
+
+.mini-pill {
+  justify-self: start;
+  padding: 4px 8px;
+  border: 1px solid #c9d5d1;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #0c5460;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.checkbox-row {
+  display: flex;
+  grid-template-columns: none;
+  align-items: center;
+}
+
+.checkbox-row input {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+}
+
 .side-panel {
   position: fixed;
   top: 72px;
@@ -540,6 +669,11 @@ select {
 
   .page {
     padding: 22px;
+  }
+
+  .companies-layout,
+  .form-grid {
+    grid-template-columns: 1fr;
   }
 
   .side-panel {

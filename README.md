@@ -14,8 +14,8 @@ This scaffold includes:
 - React shell with login, layout, navigation, and permission-based module rendering.
 - Node.js gateway with demo authentication, permission checks, and registry-driven module proxying.
 - PostgreSQL platform schema plus module-owned schema and seed scripts.
-- Tenders module placeholder route, frontend translations, backend API, and database setup.
-- FastAPI Tenders backend with health check and placeholder API.
+- Tenders and Companies module placeholder routes, frontend translations, backend APIs, and database setup.
+- FastAPI module backends with health checks and placeholder APIs.
 - Docker Compose for local development.
 
 ## Run Locally
@@ -37,11 +37,12 @@ Then open:
 - Web app: http://localhost:5173
 - Gateway health: http://localhost:3000/health
 - Tenders API health: http://localhost:8001/health
+- Companies API health: http://localhost:8002/health
 - PostgreSQL: localhost:5432
 
 ## Demo Login
 
-Use any email and password in the login screen. The gateway returns a demo user with permissions for the Tenders module.
+Use any email and password in the login screen. The gateway returns a demo user with permissions for the seeded modules.
 
 ## Repository Layout
 
@@ -50,6 +51,10 @@ apps/
   web/              React main shell
   gateway/          Node.js API gateway
 modules/
+  companies/
+    backend/        FastAPI Companies backend
+    frontend/       Companies React module package
+    infra/          Companies database schema and seed scripts
   tenders/
     backend/        FastAPI Tenders backend
     frontend/       Tenders React module package

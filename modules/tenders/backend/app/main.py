@@ -14,9 +14,9 @@ def overview() -> dict[str, object]:
         "module": "tenders",
         "status": "Ready",
         "capabilities": [
-            "Tender CRUD scaffold",
-            "Organization registry verification planned",
+            "Tender schema scaffold",
+            "Company registry verification planned",
             "Document generation planned",
-            "Dynamic admin schema planned",
+            "Tender-company participant assignment planned",
         ],
     }

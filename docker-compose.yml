@@ -12,8 +12,10 @@ services:
       - ./infra/postgres/init/001_platform_schema.sql:/docker-entrypoint-initdb.d/001_platform_schema.sql:ro
       - ./infra/postgres/init/002_dynamic_schema.sql:/docker-entrypoint-initdb.d/002_dynamic_schema.sql:ro
       - ./infra/postgres/init/003_platform_seed.sql:/docker-entrypoint-initdb.d/003_platform_seed.sql:ro
-      - ./modules/tenders/infra/postgres/010_tenders_schema.sql:/docker-entrypoint-initdb.d/010_tenders_schema.sql:ro
-      - ./modules/tenders/infra/postgres/011_tenders_seed.sql:/docker-entrypoint-initdb.d/011_tenders_seed.sql:ro
+      - ./modules/companies/infra/postgres/010_companies_schema.sql:/docker-entrypoint-initdb.d/010_companies_schema.sql:ro
+      - ./modules/companies/infra/postgres/011_companies_seed.sql:/docker-entrypoint-initdb.d/011_companies_seed.sql:ro
+      - ./modules/tenders/infra/postgres/010_tenders_schema.sql:/docker-entrypoint-initdb.d/020_tenders_schema.sql:ro
+      - ./modules/tenders/infra/postgres/011_tenders_seed.sql:/docker-entrypoint-initdb.d/021_tenders_seed.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
@@ -34,8 +36,22 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      companies-api:
+        condition: service_started
       tenders-api:
         condition: service_started
+
+  companies-api:
+    build:
+      context: .
+      dockerfile: modules/companies/backend/Dockerfile
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://admin_flow:admin_flow@postgres:5432/admin_flow}
+    ports:
+      - "8002:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   tenders-api:
     build:

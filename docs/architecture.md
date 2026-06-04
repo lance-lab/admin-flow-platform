@@ -20,11 +20,19 @@ the gateway resolves backend targets from `platform.modules`.
 The Tenders module owns:
 
 - Tender CRUD.
-- Organization CRUD and registry verification.
+- Tender participants through references to Companies module records.
 - External tender collection.
 - Price evaluation.
 - Document generation.
 - Dynamic module-admin tables.
+- Slovak and English module UI translations.
+
+The Companies module owns:
+
+- Company CRUD and registry verification.
+- People, contact roles, and preferred contacts.
+- Company bank accounts.
+- Shared company data used by Tender workflows.
 - Slovak and English module UI translations.
 
 ## Permission Model
@@ -41,11 +49,19 @@ Seeded Tenders permissions:
 - `tenders.delete`
 - `tenders.evaluate`
 - `tenders.documents.generate`
-- `tenders.organizations.verify`
 - `tenders.admin.schema.manage`
+
+Seeded Companies permissions:
+
+- `companies.read`
+- `companies.create`
+- `companies.update`
+- `companies.delete`
+- `companies.verify`
 
 ## Database Schemas
 
 - `platform`: users, roles, permissions, module registry.
 - `dynamic`: metadata-driven dynamic table definitions and JSONB rows.
+- `companies`: Shared company, person, and bank account tables used by module workflows.
 - `tenders`: Tenders module tables, initialized from `modules/tenders/infra/postgres`.

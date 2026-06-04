@@ -3,13 +3,17 @@ export type PermissionCode =
   | 'platform.modules.manage'
   | 'platform.users.read'
   | 'platform.users.manage'
+  | 'companies.read'
+  | 'companies.create'
+  | 'companies.update'
+  | 'companies.delete'
+  | 'companies.verify'
   | 'tenders.read'
   | 'tenders.create'
   | 'tenders.update'
   | 'tenders.delete'
   | 'tenders.evaluate'
   | 'tenders.documents.generate'
-  | 'tenders.organizations.verify'
   | 'tenders.admin.schema.manage';
 
 export interface AuthenticatedUser {

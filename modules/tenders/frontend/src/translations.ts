@@ -8,8 +8,8 @@ export const tendersTranslations: TranslationResources = {
     'tenders.backendPending': 'Čaká sa na kontrolu backendu',
     'tenders.cards.crud.title': 'Správa zákaziek',
     'tenders.cards.crud.description': 'Formuláre na vytváranie, kontrolu, úpravu a archiváciu zákaziek.',
-    'tenders.cards.organizations.title': 'Organizácie',
-    'tenders.cards.organizations.description': 'Správa organizácií s overením v registroch.',
+    'tenders.cards.companies.title': 'Spoločnosti',
+    'tenders.cards.companies.description': 'Zdieľaná správa spoločností, kontaktov a bankových účtov pre zákazky.',
     'tenders.cards.ai.title': 'AI asistencia',
     'tenders.cards.ai.description': 'Štruktúrovaná extrakcia a návrhy z dokumentov alebo zdrojových stránok.',
     'tenders.cards.documents.title': 'Dokumenty',
@@ -22,12 +22,11 @@ export const tendersTranslations: TranslationResources = {
     'tenders.backendPending': 'Backend health check pending',
     'tenders.cards.crud.title': 'Tender CRUD',
     'tenders.cards.crud.description': 'Forms for creating, reviewing, updating, and archiving tender records.',
-    'tenders.cards.organizations.title': 'Organizations',
-    'tenders.cards.organizations.description': 'Organization data management with registry authority verification.',
+    'tenders.cards.companies.title': 'Companies',
+    'tenders.cards.companies.description': 'Shared company, contact, and bank account management for tenders.',
     'tenders.cards.ai.title': 'AI Assistance',
     'tenders.cards.ai.description': 'Structured extraction and suggestions from tender documents or source pages.',
     'tenders.cards.documents.title': 'Documents',
     'tenders.cards.documents.description': 'Word and PDF generation from templates combined with collected tender data.'
   }
 };
-

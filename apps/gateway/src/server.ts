@@ -1,6 +1,6 @@
 import cors from 'cors';
 import express from 'express';
-import { createProxyMiddleware } from 'http-proxy-middleware';
+import { createProxyMiddleware, fixRequestBody } from 'http-proxy-middleware';
 import { authenticate, requirePermission, signUser } from './auth.js';
 import { config } from './config.js';
 import { createSetupToken, hashPassword, hashSetupToken, verifyPassword } from './passwords.js';
@@ -298,6 +298,9 @@ app.use('/api/modules/:moduleCode', authenticate, async (req, res, next) => {
     return createProxyMiddleware({
       target: module.backendBaseUrl,
       changeOrigin: true,
+      on: {
+        proxyReq: fixRequestBody
+      },
       pathRewrite: (path) => `/api${path}`
     })(req, res, next);
   } catch (error) {
