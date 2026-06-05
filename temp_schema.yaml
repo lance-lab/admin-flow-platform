@@ -59,6 +59,7 @@ companies (Spolocnosti)
     - address_city (TEXT) (Obec)
     - address_country (TEXT) (Stat, stored as English EU country name)
     - address_postal_code (TEXT) (PSC)
+    - contracting_authority (BOOLEAN) (VerejnyZadavatel)
 
 company_persons (SpolocnostiOsoby)
     - id (UUID)

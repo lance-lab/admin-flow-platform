@@ -18,6 +18,9 @@ BEGIN
 END $$;
 
 ALTER TABLE companies.companies
+  ADD COLUMN IF NOT EXISTS contracting_authority BOOLEAN NOT NULL DEFAULT FALSE;
+
+ALTER TABLE companies.companies
   ALTER COLUMN address_country SET DEFAULT 'Slovakia';
 
 UPDATE companies.companies

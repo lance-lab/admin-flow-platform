@@ -17,6 +17,7 @@ export interface CompanySummary {
   addressCity: string | null;
   addressCountry: string;
   addressPostalCode: string | null;
+  contractingAuthority: boolean;
   contactCount: number;
   bankAccountCount: number;
 }
@@ -27,7 +28,7 @@ export interface CompanyContact {
   email: string | null;
   phoneNumber: string | null;
   dateOfBirth: string | null;
-  role: string | null;
+  role: CompanyPersonRole | null;
   preferred: boolean;
 }
 
@@ -37,6 +38,8 @@ export interface CompanyBankAccount {
   bankCode: string | null;
   preferred: boolean;
 }
+
+export type CompanyPersonRole = 'board_member' | 'vice_chairman' | 'chairman' | 'executive_dictor' | 'owner';
 
 export interface CompanyDetail extends Omit<CompanySummary, 'contactCount' | 'bankAccountCount'> {
   contacts: CompanyContact[];
@@ -53,6 +56,7 @@ export interface CompanyInput {
   addressCity?: string | null;
   addressCountry: string;
   addressPostalCode?: string | null;
+  contractingAuthority: boolean;
 }
 
 export interface ContactInput {
@@ -60,7 +64,7 @@ export interface ContactInput {
   email?: string | null;
   phoneNumber?: string | null;
   dateOfBirth?: string | null;
-  role?: string | null;
+  role?: CompanyPersonRole | null;
   preferred: boolean;
 }
 
@@ -110,6 +114,13 @@ export function createCompany(input: CompanyInput) {
   });
 }
 
+export function updateCompany(companyId: string, input: CompanyInput) {
+  return request<{ company: CompanySummary }>(`/api/modules/companies/companies/${companyId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(input)
+  });
+}
+
 export function resolveCompanyByIco(ico: string, country: string) {
   return request<ResolvedCompany>(
     `/api/modules/companies/companies/resolve/${encodeURIComponent(ico)}?country=${encodeURIComponent(country)}`
@@ -133,12 +144,47 @@ export function createContact(companyId: string, input: ContactInput) {
   });
 }
 
+export function updateContact(companyId: string, contactId: string, input: ContactInput) {
+  return request<{ contact: { id: string } }>(
+    `/api/modules/companies/companies/${companyId}/contacts/${contactId}`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify(input)
+    }
+  );
+}
+
+export function deleteContact(companyId: string, contactId: string) {
+  return request<{ success: true }>(`/api/modules/companies/companies/${companyId}/contacts/${contactId}`, {
+    method: 'DELETE'
+  });
+}
+
 export function createBankAccount(companyId: string, input: BankAccountInput) {
   return request<{ bankAccount: { id: string } }>(
     `/api/modules/companies/companies/${companyId}/bank-accounts`,
     {
       method: 'POST',
       body: JSON.stringify(input)
+    }
+  );
+}
+
+export function updateBankAccount(companyId: string, bankAccountId: string, input: BankAccountInput) {
+  return request<{ bankAccount: { id: string } }>(
+    `/api/modules/companies/companies/${companyId}/bank-accounts/${bankAccountId}`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify(input)
+    }
+  );
+}
+
+export function deleteBankAccount(companyId: string, bankAccountId: string) {
+  return request<{ success: true }>(
+    `/api/modules/companies/companies/${companyId}/bank-accounts/${bankAccountId}`,
+    {
+      method: 'DELETE'
     }
   );
 }

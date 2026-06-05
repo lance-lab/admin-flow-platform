@@ -11,10 +11,14 @@ CREATE TABLE IF NOT EXISTS companies.companies (
   address_city TEXT,
   address_country TEXT NOT NULL DEFAULT 'Slovakia',
   address_postal_code TEXT,
+  contracting_authority BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   CONSTRAINT companies_ico_unique UNIQUE (ico)
 );
+
+ALTER TABLE companies.companies
+  ADD COLUMN IF NOT EXISTS contracting_authority BOOLEAN NOT NULL DEFAULT FALSE;
 
 ALTER TABLE companies.companies
   ALTER COLUMN address_country SET DEFAULT 'Slovakia';
@@ -90,6 +94,41 @@ SET name = COALESCE(name, '');
 
 ALTER TABLE companies.company_persons
   ALTER COLUMN name SET NOT NULL;
+
+UPDATE companies.company_persons
+SET role = CASE
+  WHEN role IS NULL OR TRIM(role) = '' THEN NULL
+  WHEN LOWER(role) = 'board_member' THEN 'board_member'
+  WHEN LOWER(role) = 'board member' THEN 'board_member'
+  WHEN LOWER(role) = 'člen predstavenstva' THEN 'board_member'
+  WHEN LOWER(role) = 'vice_chairman' THEN 'vice_chairman'
+  WHEN LOWER(role) = 'vice-chairman of the board' THEN 'vice_chairman'
+  WHEN LOWER(role) = 'podpredseda predstavenstva' THEN 'vice_chairman'
+  WHEN LOWER(role) = 'chairman' THEN 'chairman'
+  WHEN LOWER(role) = 'chairman of the board' THEN 'chairman'
+  WHEN LOWER(role) = 'predseda predstavenstva' THEN 'chairman'
+  WHEN LOWER(role) = 'executive_dictor' THEN 'executive_dictor'
+  WHEN LOWER(role) = 'executive director' THEN 'executive_dictor'
+  WHEN LOWER(role) = 'konateľ' THEN 'executive_dictor'
+  WHEN LOWER(role) = 'owner' THEN 'owner'
+  WHEN LOWER(role) = 'majiteľ' THEN 'owner'
+  ELSE NULL
+END;
+
+ALTER TABLE companies.company_persons
+  DROP CONSTRAINT IF EXISTS company_persons_role_allowed;
+
+ALTER TABLE companies.company_persons
+  ADD CONSTRAINT company_persons_role_allowed
+  CHECK (
+    role IS NULL OR role IN (
+      'board_member',
+      'vice_chairman',
+      'chairman',
+      'executive_dictor',
+      'owner'
+    )
+  );
 
 DO $$
 BEGIN
