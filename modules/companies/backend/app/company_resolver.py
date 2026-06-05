@@ -16,30 +16,30 @@ from .config import settings
 
 
 class BankAccountResponse(BaseModel):
-    Ucet: str
-    Banka: str | None = None
+    bankAccountNumber: str
+    bankCode: str | None = None
 
 
 class StatutaryResponse(BaseModel):
-    StatutarnyOrgan: str | None = None
-    StatutarnyOrganFunkcia: str | None = None
+    name: str | None = None
+    role: str | None = None
 
 
 class OrganizationResponse(BaseModel):
-    Ico: str
-    Meno: str
-    Dic: str | None = None
-    IcDph: str | None = None
-    PlnaAdresa: str | None = None
-    Mesto: str | None = None
-    Ulica: str | None = None
-    CisloDomu: str | None = None
-    Stat: str | None = None
-    Psc: str | None = None
-    Statutary: list[StatutaryResponse] = Field(default_factory=list)
-    BankoveUcty: list[BankAccountResponse] = Field(default_factory=list)
-    Vytvorene: str
-    Updatovane: str
+    ico: str
+    name: str
+    dic: str | None = None
+    icDph: str | None = None
+    addressFull: str | None = None
+    addressCity: str | None = None
+    addressStreet: str | None = None
+    addressNumber: str | None = None
+    addressCountry: str | None = None
+    addressPostalCode: str | None = None
+    statutoryBodies: list[StatutaryResponse] = Field(default_factory=list)
+    bankAccounts: list[BankAccountResponse] = Field(default_factory=list)
+    createdAt: str
+    updatedAt: str
 
 
 class FinanceBankAccount(BaseModel):
@@ -66,17 +66,17 @@ class LegalPersonReference(BaseModel):
 
 
 class ExternalOrganizationRegistration(BaseModel):
-    Ico: str
-    Meno: str
-    PlnaAdresa: str | None = None
-    Mesto: str | None = None
-    Ulica: str | None = None
-    CisloDomu: str | None = None
-    Stat: str
-    Psc: str | None = None
-    Statutary: list[StatutaryResponse] = Field(default_factory=list)
-    Vytvorene: str
-    Updatovane: str
+    ico: str
+    name: str
+    addressFull: str | None = None
+    addressCity: str | None = None
+    addressStreet: str | None = None
+    addressNumber: str | None = None
+    addressCountry: str
+    addressPostalCode: str | None = None
+    statutoryBodies: list[StatutaryResponse] = Field(default_factory=list)
+    createdAt: str
+    updatedAt: str
 
 
 class _Address:
@@ -266,23 +266,23 @@ def resolve_company_by_ico(identification_number: str, country: str = "SK") -> O
     finance = _read_finance_registration_or_empty(identification_number)
 
     return OrganizationResponse(
-        Ico=register.Ico,
-        Meno=register.Meno,
-        Dic=_dic_value(finance, register),
-        IcDph=finance.icdph,
-        PlnaAdresa=register.PlnaAdresa,
-        Mesto=register.Mesto,
-        Ulica=register.Ulica,
-        CisloDomu=register.CisloDomu,
-        Stat=register.Stat,
-        Psc=register.Psc,
-        Statutary=register.Statutary,
-        BankoveUcty=[
-            BankAccountResponse(Ucet=bank_account.account, Banka=bank_account.bank)
+        ico=register.ico,
+        name=register.name,
+        dic=_dic_value(finance, register),
+        icDph=finance.icdph,
+        addressFull=register.addressFull,
+        addressCity=register.addressCity,
+        addressStreet=register.addressStreet,
+        addressNumber=register.addressNumber,
+        addressCountry=_english_country_name(register.addressCountry),
+        addressPostalCode=register.addressPostalCode,
+        statutoryBodies=register.statutoryBodies,
+        bankAccounts=[
+            BankAccountResponse(bankAccountNumber=bank_account.account, bankCode=bank_account.bank)
             for bank_account in finance.bank_accounts
         ],
-        Vytvorene=register.Vytvorene,
-        Updatovane=register.Updatovane,
+        createdAt=register.createdAt,
+        updatedAt=register.updatedAt,
     )
 
 
@@ -476,17 +476,17 @@ def _to_orsr_registration(details: dict[str, Any], identification_number: str) -
     updated = _normalize_datetime(_text(details, "dataSyncDate")) or created
 
     return ExternalOrganizationRegistration(
-        Ico=ico,
-        Meno=_current_value(corporate_body.get("corporateBodyFullName")),
-        PlnaAdresa=_format_orsr_address(address),
-        Mesto=_item_text(address, "municipality"),
-        Ulica=_street_name(address),
-        CisloDomu=_text(address, "buildingNumber") or None,
-        Stat=_country_name(address),
-        Psc=_text(_dict(address.get("deliveryAddress")), "postalCode") or None,
-        Statutary=_orsr_statutary_items(statutory_bodies, statutory_body_type),
-        Vytvorene=created,
-        Updatovane=updated,
+        ico=ico,
+        name=_current_value(corporate_body.get("corporateBodyFullName")),
+        addressFull=_format_orsr_address(address),
+        addressCity=_item_text(address, "municipality"),
+        addressStreet=_street_name(address),
+        addressNumber=_text(address, "buildingNumber") or None,
+        addressCountry=_english_country_name(_country_name(address)),
+        addressPostalCode=_text(_dict(address.get("deliveryAddress")), "postalCode") or None,
+        statutoryBodies=_orsr_statutary_items(statutory_bodies, statutory_body_type),
+        createdAt=created,
+        updatedAt=updated,
     )
 
 
@@ -548,17 +548,17 @@ def _to_orcz_registration(html: str, identification_number: str) -> ExternalOrga
     updated = _normalize_datetime(_valid_to_date(html)) or _now()
 
     return ExternalOrganizationRegistration(
-        Ico=ico,
-        Meno=name,
-        PlnaAdresa=_format_orcz_address(address),
-        Mesto=_city(address),
-        Ulica=_street(address),
-        CisloDomu=_building_number(address),
-        Stat="Česká republika",
-        Psc=_postal_code(address),
-        Statutary=_orcz_statutary_items(html),
-        Vytvorene=created,
-        Updatovane=updated,
+        ico=ico,
+        name=name,
+        addressFull=_format_orcz_address(address),
+        addressCity=_city(address),
+        addressStreet=_street(address),
+        addressNumber=_building_number(address),
+        addressCountry="Czech Republic",
+        addressPostalCode=_postal_code(address),
+        statutoryBodies=_orcz_statutary_items(html),
+        createdAt=created,
+        updatedAt=updated,
     )
 
 
@@ -721,8 +721,8 @@ def _orcz_statutary_items(html: str) -> list[StatutaryResponse]:
         for name in _orcz_names_after_function(section, function):
             items.append(
                 StatutaryResponse(
-                    StatutarnyOrgan=name,
-                    StatutarnyOrganFunkcia=_capitalize_first(function.rstrip(":")),
+                    name=name,
+                    role=_capitalize_first(function.rstrip(":")),
                 )
             )
 
@@ -828,7 +828,7 @@ def _orsr_statutary_items(statutory_bodies: list[dict[str, Any]], statutory_body
         name = _statutary_name(statutory_body)
         function = _statutary_function(statutory_body, statutory_body_type)
         if name or function:
-            statutary.append(StatutaryResponse(StatutarnyOrgan=name, StatutarnyOrganFunkcia=function))
+            statutary.append(StatutaryResponse(name=name, role=function))
 
     return statutary
 
@@ -881,10 +881,21 @@ def _dic_value(finance: FinanceRegistration, register: ExternalOrganizationRegis
     if finance.dic:
         return finance.dic
 
-    if register.Stat == "Česká republika" and finance.icdph and finance.icdph.upper().startswith("CZ"):
+    if _english_country_name(register.addressCountry) == "Czech Republic" and finance.icdph and finance.icdph.upper().startswith("CZ"):
         return finance.icdph
 
     return None
+
+
+def _english_country_name(country: str | None) -> str | None:
+    normalized = _normalize_label(country or "")
+    if normalized in {"sk", "slovensko", "slovenska republika"}:
+        return "Slovakia"
+
+    if normalized in {"cz", "cesko", "ceska republika", "czech republic"}:
+        return "Czech Republic"
+
+    return country
 
 
 def _tax_id_value(text: str) -> str | None:

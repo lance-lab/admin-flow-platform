@@ -4,7 +4,7 @@ from uuid import UUID
 import psycopg
 from fastapi import FastAPI, HTTPException, Path, Query, status
 from psycopg.rows import dict_row
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from .config import settings
 from .company_resolver import OrganizationResponse, resolve_company_by_ico
@@ -12,35 +12,115 @@ from .company_resolver import OrganizationResponse, resolve_company_by_ico
 app = FastAPI(title="Companies Module API", version="0.1.0")
 
 
+EU_COUNTRIES_BY_CODE = {
+    "AT": "Austria",
+    "BE": "Belgium",
+    "BG": "Bulgaria",
+    "HR": "Croatia",
+    "CY": "Cyprus",
+    "CZ": "Czech Republic",
+    "DK": "Denmark",
+    "EE": "Estonia",
+    "FI": "Finland",
+    "FR": "France",
+    "DE": "Germany",
+    "GR": "Greece",
+    "HU": "Hungary",
+    "IE": "Ireland",
+    "IT": "Italy",
+    "LV": "Latvia",
+    "LT": "Lithuania",
+    "LU": "Luxembourg",
+    "MT": "Malta",
+    "NL": "Netherlands",
+    "PL": "Poland",
+    "PT": "Portugal",
+    "RO": "Romania",
+    "SK": "Slovakia",
+    "SI": "Slovenia",
+    "ES": "Spain",
+    "SE": "Sweden",
+}
+EU_COUNTRIES_BY_NAME = {country.upper(): country for country in EU_COUNTRIES_BY_CODE.values()}
+
+
 def db_connect():
     return psycopg.connect(settings.database_url, row_factory=dict_row)
 
 
+@app.on_event("startup")
+def apply_compatibility_migrations() -> None:
+    with db_connect() as conn:
+        conn.execute(
+            """
+            DO $$
+            BEGIN
+              IF EXISTS (
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_schema = 'companies'
+                  AND table_name = 'company_persons'
+                  AND column_name = 'surname'
+              ) THEN
+                UPDATE companies.company_persons
+                SET name = NULLIF(TRIM(CONCAT_WS(' ', NULLIF(name, ''), NULLIF(surname, ''))), '')
+                WHERE surname IS NOT NULL
+                  AND TRIM(surname) <> '';
+
+                ALTER TABLE companies.company_persons
+                  DROP COLUMN surname;
+              END IF;
+            END $$;
+            """
+        )
+
+
 class CompanyInput(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     name: str = Field(min_length=1)
     ico: str | None = None
     dic: str | None = None
-    ic_dph: str | None = None
-    address_street: str | None = None
-    address_number: str | None = None
-    address_city: str | None = None
-    address_country: str = "SK"
-    address_postal_code: str | None = None
+    ic_dph: str | None = Field(default=None, alias="icDph")
+    address_street: str | None = Field(default=None, alias="addressStreet")
+    address_number: str | None = Field(default=None, alias="addressNumber")
+    address_city: str | None = Field(default=None, alias="addressCity")
+    address_country: str = Field(default="Slovakia", alias="addressCountry")
+    address_postal_code: str | None = Field(default=None, alias="addressPostalCode")
+
+    @field_validator("address_country", mode="before")
+    @classmethod
+    def normalize_address_country(cls, value: object) -> str:
+        country = str(value or "").strip()
+        if not country:
+            return "Slovakia"
+
+        normalized = country.upper()
+        if normalized in EU_COUNTRIES_BY_CODE:
+            return EU_COUNTRIES_BY_CODE[normalized]
+
+        if normalized in EU_COUNTRIES_BY_NAME:
+            return EU_COUNTRIES_BY_NAME[normalized]
+
+        raise ValueError("Company country must be an EU country")
 
 
 class ContactInput(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     name: str = Field(min_length=1)
-    surname: str = Field(min_length=1)
     email: str | None = None
-    phone_number: str | None = None
-    date_of_birth: str | None = None
+    phone_number: str | None = Field(default=None, alias="phoneNumber")
+    date_of_birth: str | None = Field(default=None, alias="dateOfBirth")
     role: str | None = None
     preferred: bool = False
 
 
 class BankAccountInput(BaseModel):
-    bank_account_number: str = Field(min_length=1)
-    bank_code: str | None = None
+    model_config = ConfigDict(populate_by_name=True)
+
+    bank_account_number: str = Field(alias="bankAccountNumber", min_length=1)
+    bank_code: str | None = Field(default=None, alias="bankCode")
     preferred: bool = False
 
 
@@ -181,7 +261,6 @@ def get_company(company_id: CompanyId) -> dict[str, object]:
             SELECT
               cp.id::text AS id,
               cp.name,
-              cp.surname,
               cp.email,
               cp.phone_number AS "phoneNumber",
               cp.date_of_birth::text AS "dateOfBirth",
@@ -189,7 +268,7 @@ def get_company(company_id: CompanyId) -> dict[str, object]:
               cp.preferred
             FROM companies.company_persons cp
             WHERE cp.company_id = %(company_id)s
-            ORDER BY cp.preferred DESC, cp.surname ASC, cp.name ASC
+            ORDER BY cp.preferred DESC, cp.name ASC
             """,
             {"company_id": company_id},
         ).fetchall()
@@ -261,7 +340,6 @@ def create_contact(company_id: CompanyId, input_data: ContactInput) -> dict[str,
             INSERT INTO companies.company_persons (
               company_id,
               name,
-              surname,
               email,
               phone_number,
               date_of_birth,
@@ -271,7 +349,6 @@ def create_contact(company_id: CompanyId, input_data: ContactInput) -> dict[str,
             VALUES (
               %(company_id)s,
               %(name)s,
-              %(surname)s,
               %(email)s,
               %(phone_number)s,
               %(date_of_birth)s,

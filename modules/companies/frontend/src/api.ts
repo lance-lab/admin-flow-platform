@@ -24,7 +24,6 @@ export interface CompanySummary {
 export interface CompanyContact {
   id: string;
   name: string;
-  surname: string;
   email: string | null;
   phoneNumber: string | null;
   dateOfBirth: string | null;
@@ -48,47 +47,52 @@ export interface CompanyInput {
   name: string;
   ico?: string | null;
   dic?: string | null;
-  ic_dph?: string | null;
-  address_street?: string | null;
-  address_number?: string | null;
-  address_city?: string | null;
-  address_country: string;
-  address_postal_code?: string | null;
+  icDph?: string | null;
+  addressStreet?: string | null;
+  addressNumber?: string | null;
+  addressCity?: string | null;
+  addressCountry: string;
+  addressPostalCode?: string | null;
 }
 
 export interface ContactInput {
   name: string;
-  surname: string;
   email?: string | null;
-  phone_number?: string | null;
-  date_of_birth?: string | null;
+  phoneNumber?: string | null;
+  dateOfBirth?: string | null;
   role?: string | null;
   preferred: boolean;
 }
 
 export interface BankAccountInput {
-  bank_account_number: string;
-  bank_code?: string | null;
+  bankAccountNumber: string;
+  bankCode?: string | null;
   preferred: boolean;
 }
 
 export interface ResolvedBankAccount {
-  Ucet: string;
-  Banka: string | null;
+  bankAccountNumber: string;
+  bankCode: string | null;
+}
+
+export interface ResolvedStatutoryBody {
+  name: string | null;
+  role: string | null;
 }
 
 export interface ResolvedCompany {
-  Ico: string;
-  Meno: string;
-  Dic: string | null;
-  IcDph: string | null;
-  PlnaAdresa: string | null;
-  Mesto: string | null;
-  Ulica: string | null;
-  CisloDomu: string | null;
-  Stat: string | null;
-  Psc: string | null;
-  BankoveUcty: ResolvedBankAccount[];
+  ico: string;
+  name: string;
+  dic: string | null;
+  icDph: string | null;
+  addressFull: string | null;
+  addressCity: string | null;
+  addressStreet: string | null;
+  addressNumber: string | null;
+  addressCountry: string | null;
+  addressPostalCode: string | null;
+  statutoryBodies: ResolvedStatutoryBody[];
+  bankAccounts: ResolvedBankAccount[];
 }
 
 export function getCompaniesOverview() {

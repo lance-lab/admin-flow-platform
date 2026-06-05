@@ -9,18 +9,28 @@ CREATE TABLE IF NOT EXISTS companies.companies (
   address_street TEXT,
   address_number TEXT,
   address_city TEXT,
-  address_country TEXT NOT NULL DEFAULT 'SK',
+  address_country TEXT NOT NULL DEFAULT 'Slovakia',
   address_postal_code TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   CONSTRAINT companies_ico_unique UNIQUE (ico)
 );
 
+ALTER TABLE companies.companies
+  ALTER COLUMN address_country SET DEFAULT 'Slovakia';
+
+UPDATE companies.companies
+SET address_country = CASE
+  WHEN UPPER(address_country) = 'SK' THEN 'Slovakia'
+  WHEN UPPER(address_country) = 'CZ' THEN 'Czech Republic'
+  ELSE address_country
+END
+WHERE UPPER(address_country) IN ('SK', 'CZ');
+
 CREATE TABLE IF NOT EXISTS companies.company_persons (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   company_id UUID NOT NULL REFERENCES companies.companies(id) ON DELETE CASCADE,
   name TEXT,
-  surname TEXT,
   email TEXT,
   phone_number TEXT,
   date_of_birth DATE,
@@ -32,7 +42,6 @@ CREATE TABLE IF NOT EXISTS companies.company_persons (
 
 ALTER TABLE companies.company_persons
   ADD COLUMN IF NOT EXISTS name TEXT,
-  ADD COLUMN IF NOT EXISTS surname TEXT,
   ADD COLUMN IF NOT EXISTS email TEXT,
   ADD COLUMN IF NOT EXISTS phone_number TEXT,
   ADD COLUMN IF NOT EXISTS date_of_birth DATE;
@@ -48,8 +57,7 @@ BEGIN
   ) AND to_regclass('companies.persons') IS NOT NULL THEN
     UPDATE companies.company_persons cp
     SET
-      name = COALESCE(cp.name, p.name),
-      surname = COALESCE(cp.surname, p.surname),
+      name = NULLIF(TRIM(CONCAT_WS(' ', NULLIF(COALESCE(cp.name, p.name), ''), NULLIF(p.surname, ''))), ''),
       email = COALESCE(cp.email, p.email),
       phone_number = COALESCE(cp.phone_number, p.phone_number),
       date_of_birth = COALESCE(cp.date_of_birth, p.date_of_birth)
@@ -58,14 +66,30 @@ BEGIN
   END IF;
 END $$;
 
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'companies'
+      AND table_name = 'company_persons'
+      AND column_name = 'surname'
+  ) THEN
+    UPDATE companies.company_persons
+    SET name = NULLIF(TRIM(CONCAT_WS(' ', NULLIF(name, ''), NULLIF(surname, ''))), '')
+    WHERE surname IS NOT NULL
+      AND TRIM(surname) <> '';
+
+    ALTER TABLE companies.company_persons
+      DROP COLUMN surname;
+  END IF;
+END $$;
+
 UPDATE companies.company_persons
-SET
-  name = COALESCE(name, ''),
-  surname = COALESCE(surname, '');
+SET name = COALESCE(name, '');
 
 ALTER TABLE companies.company_persons
-  ALTER COLUMN name SET NOT NULL,
-  ALTER COLUMN surname SET NOT NULL;
+  ALTER COLUMN name SET NOT NULL;
 
 DO $$
 BEGIN

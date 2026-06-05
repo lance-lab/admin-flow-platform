@@ -99,6 +99,7 @@ select {
   justify-content: center;
   gap: 8px;
   min-height: 42px;
+  padding: 0 16px;
   border: 0;
   border-radius: 6px;
   cursor: pointer;
@@ -230,7 +231,6 @@ select {
 }
 
 .icon-text-button {
-  padding: 0 14px;
   background: #edf2f0;
   color: #243033;
   font-weight: 800;
@@ -238,7 +238,6 @@ select {
 }
 
 .danger-button {
-  padding: 0 14px;
   background: #f7e7e2;
   color: #8a2f1c;
   font-weight: 800;
@@ -533,6 +532,20 @@ select {
   color: #4b5a5d;
 }
 
+.contact-summary,
+.bank-account-summary {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.contact-name,
+.contact-role,
+.bank-account-number,
+.bank-account-bank {
+  overflow-wrap: anywhere;
+}
+
 .mini-pill {
   justify-self: start;
   padding: 4px 8px;
@@ -562,6 +575,7 @@ select {
 
 .segmented-control button {
   min-height: 38px;
+  padding: 0 14px;
   border: 0;
   border-radius: 6px;
   background: transparent;
@@ -574,6 +588,73 @@ select {
   background: #ffffff;
   color: #0c5460;
   box-shadow: 0 1px 4px rgba(24, 32, 35, 0.08);
+}
+
+.create-stepper {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.create-stepper button {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  min-height: 64px;
+  padding: 8px 12px;
+  border: 1px solid #d8e2de;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #4b5a5d;
+  font-size: 12px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.create-stepper button:disabled {
+  cursor: not-allowed;
+  opacity: 0.54;
+}
+
+.create-stepper button.active {
+  border-color: #0c5460;
+  background: #eef6f3;
+  color: #0c5460;
+}
+
+.create-stepper span {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: #dfe8e4;
+}
+
+.create-stepper button.active span {
+  background: #0c5460;
+  color: #ffffff;
+}
+
+.create-step-actions {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: auto;
+  padding-top: 14px;
+  border-top: 1px solid #e1e9e6;
+  background: #ffffff;
+}
+
+.review-summary {
+  display: grid;
+  gap: 10px;
+}
+
+.review-summary h3 {
+  margin: 0;
 }
 
 .checkbox-row {
@@ -593,7 +674,7 @@ select {
   top: 72px;
   right: 0;
   bottom: 0;
-  z-index: 20;
+  z-index: 50;
   width: min(430px, calc(100vw - 24px));
   overflow: auto;
   border-left: 1px solid #dfe7e3;
@@ -603,6 +684,31 @@ select {
 
 .detail-side-panel {
   width: min(560px, calc(100vw - 24px));
+}
+
+.create-side-panel {
+  width: min(680px, calc(100vw - 24px));
+}
+
+.create-side-panel .side-panel-form {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - 72px);
+}
+
+.company-main-panel {
+  position: static;
+  width: 100%;
+  min-height: calc(100vh - 156px);
+  overflow: visible;
+  border: 1px solid #dfe7e3;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: none;
+}
+
+.company-main-panel .side-panel-form {
+  min-height: calc(100vh - 156px);
 }
 
 .side-panel-form {
@@ -628,6 +734,11 @@ select {
   border-top: 0;
 }
 
+.inline-add-form {
+  display: grid;
+  gap: 12px;
+}
+
 .draft-item {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: start;
@@ -636,8 +747,8 @@ select {
 .notification-stack {
   position: fixed;
   right: 22px;
-  bottom: 22px;
-  z-index: 40;
+  top: 22px;
+  z-index: 70;
   display: grid;
   gap: 10px;
   width: min(380px, calc(100vw - 44px));
@@ -737,8 +848,18 @@ select {
     grid-template-columns: 1fr;
   }
 
+  .create-stepper {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .side-panel {
     top: 0;
     width: 100vw;
+  }
+
+  .notification-stack {
+    top: 16px;
+    right: 16px;
+    width: min(380px, calc(100vw - 32px));
   }
 }
