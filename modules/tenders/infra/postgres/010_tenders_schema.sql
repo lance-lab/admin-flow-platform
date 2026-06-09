@@ -13,10 +13,15 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typnamespace = 'tenders'::regnamespace AND typname = 'tender_company_role') THEN
     CREATE TYPE tenders.tender_company_role AS ENUM ('contracting_authority', 'bidder', 'winner', 'supplier');
   END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typnamespace = 'tenders'::regnamespace AND typname = 'procurement_item_unit') THEN
+    CREATE TYPE tenders.procurement_item_unit AS ENUM ('pcs', 'm', 'kg');
+  END IF;
 END $$;
 
 CREATE TABLE IF NOT EXISTS tenders.tenders (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  title TEXT NOT NULL DEFAULT '',
   type tenders.tender_type NOT NULL,
   josephine_external_id VARCHAR(20),
   created_by UUID REFERENCES platform.users(id),
@@ -26,6 +31,7 @@ CREATE TABLE IF NOT EXISTS tenders.tenders (
 );
 
 ALTER TABLE tenders.tenders
+  ADD COLUMN IF NOT EXISTS title TEXT NOT NULL DEFAULT '',
   ADD COLUMN IF NOT EXISTS type tenders.tender_type NOT NULL DEFAULT 'survey',
   ADD COLUMN IF NOT EXISTS josephine_external_id VARCHAR(20);
 
@@ -74,6 +80,19 @@ CREATE TABLE IF NOT EXISTS tenders.procurement_contracts (
   document_date TIMESTAMPTZ,
   delivery_deadline TIMESTAMPTZ,
   offer_validity_deadline TIMESTAMPTZ,
+  estimated_value_excl_vat NUMERIC(10, 2),
+  estimated_value_incl_vat NUMERIC(10, 2),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS tenders.procurement_items (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  procurement_contract_id UUID NOT NULL REFERENCES tenders.procurement_contracts(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  description TEXT,
+  quantity NUMERIC(10, 2),
+  unit tenders.procurement_item_unit,
   estimated_value_excl_vat NUMERIC(10, 2),
   estimated_value_incl_vat NUMERIC(10, 2),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -146,6 +165,7 @@ END $$;
 CREATE INDEX IF NOT EXISTS tenders_tenders_type_idx ON tenders.tenders (type);
 CREATE INDEX IF NOT EXISTS tenders_measures_tender_id_idx ON tenders.measures (tender_id);
 CREATE INDEX IF NOT EXISTS tenders_procurement_contracts_tender_id_idx ON tenders.procurement_contracts (tender_id);
+CREATE INDEX IF NOT EXISTS tenders_procurement_items_contract_id_idx ON tenders.procurement_items (procurement_contract_id);
 CREATE INDEX IF NOT EXISTS tenders_tender_companies_tender_id_idx ON tenders.tender_companies (tender_id);
 CREATE INDEX IF NOT EXISTS tenders_tender_companies_company_id_idx ON tenders.tender_companies (company_id);
 CREATE INDEX IF NOT EXISTS tenders_tender_companies_role_idx ON tenders.tender_companies (role);

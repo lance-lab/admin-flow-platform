@@ -37,6 +37,16 @@ procurement_contracts (Zakazky)
     - estimated_value_excl_vat (DECIMAL 10, 2) (PHZ bez DPH)
     - estimated_value_incl_vat (DECIMAL 10, 2) (PHZ s DPH)
 
+procurement_items (Predmet Zakazky)
+    - id (UUID)
+    - procurement_contract_id (Reference to procurement_contracts)
+    - name (TEXT) (Nazov Polozky)
+    - description (TEXT) (Popis Polozky)
+    - quantity (DECIMAL 10, 2) (Mnozstvo)
+    - unit (ENUM: "pcs|ks", "m|m", "kg|kg") (Jednotka)
+    - estimated_value_excl_vat (DECIMAL 10, 2) (Odhadovana Hodnota bez DPH)
+    - estimated_value_incl_vat (DECIMAL 10, 2) (Odhadovana Hodnota s DPH)
+
 tender_companies
     - id (UUID)
     - tender_id (Reference to tenders)
