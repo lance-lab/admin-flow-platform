@@ -6,6 +6,12 @@ export interface TendersOverview {
   capabilities: string[];
 }
 
+export interface ContractingAuthorityCompanySummary {
+  id: string;
+  name: string;
+  ico: string | null;
+}
+
 export type TenderType = 'survey' | 'competition';
 export type ProcurementType = 'goods' | 'services' | 'works';
 export type ProcurementItemUnit = 'pcs' | 'm' | 'kg';
@@ -26,6 +32,8 @@ export interface ProcurementContractSummary {
   tenderId: string;
   tenderType: TenderType;
   josephineExternalId: string | null;
+  contractingAuthorityCompanyId: string | null;
+  contractingAuthorityCompanyName: string | null;
   measureId: string | null;
   measureNumber: string | null;
   measureSubNumber: string | null;
@@ -48,6 +56,7 @@ export interface ProcurementContractSummary {
 export interface ProcurementContractInput {
   tenderType: TenderType;
   josephineExternalId?: string | null;
+  contractingAuthorityCompanyId?: string | null;
   measureNumber?: string | null;
   measureSubNumber?: string | null;
   callNumber?: string | null;
@@ -82,6 +91,12 @@ export function getTendersOverview() {
 export function listProcurementContracts() {
   return request<{ procurementContracts: ProcurementContractSummary[] }>(
     '/api/modules/tenders/procurement-contracts'
+  );
+}
+
+export async function listContractingAuthorityCompanies() {
+  return request<{ companies: ContractingAuthorityCompanySummary[] }>(
+    '/api/modules/tenders/contracting-authority-companies'
   );
 }
 

@@ -1,12 +1,14 @@
-import { ClipboardList, Pencil, Plus, Trash2 } from 'lucide-react';
+import { ClipboardList, Download, Pencil, Plus, Trash2 } from 'lucide-react';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useI18n } from '../../../../apps/web/src/i18n/I18nProvider';
 import { useNotifications } from '../../../../apps/web/src/shell/Notifications';
 import {
   createProcurementContract,
   getTendersOverview,
+  listContractingAuthorityCompanies,
   listProcurementContracts,
   updateProcurementContract,
+  type ContractingAuthorityCompanySummary,
   type ProcurementContractSummary,
   type ProcurementItemInput,
   type ProcurementItemUnit,
@@ -18,6 +20,7 @@ import {
 type ViewMode = 'list' | 'create' | 'edit';
 type PanelMode = 'closed' | 'detail';
 type DraftItem = ProcurementItemInput & { id: string };
+type ExportRow = { label: string; value: string | number | null };
 
 const TENDER_TYPES: TenderType[] = ['survey', 'competition'];
 const PROCUREMENT_TYPES: ProcurementType[] = ['goods', 'services', 'works'];
@@ -36,8 +39,9 @@ function emptyToNull(value: string) {
 }
 
 function numberToNull(value: string) {
-  const trimmed = value.trim();
-  return trimmed ? Number(trimmed) : null;
+  const normalized = value.replace(/,/g, '').trim();
+  const parsed = normalized ? Number(normalized) : null;
+  return parsed === null || Number.isFinite(parsed) ? parsed : null;
 }
 
 function stringFromNumber(value: number | null) {
@@ -52,15 +56,182 @@ function draftId() {
   return `draft-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
-function money(value: number | null, locale: 'en' | 'sk') {
+function price(value: number | null) {
   if (value === null) {
     return '-';
   }
 
-  return new Intl.NumberFormat(locale === 'sk' ? 'sk-SK' : 'en-US', {
+  return new Intl.NumberFormat('en-US', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
   }).format(value);
+}
+
+function priceInputValue(value: number | null) {
+  return value === null ? '' : price(value);
+}
+
+function exportValue(value: string | number | null) {
+  return value === null || value === '' ? '-' : String(value);
+}
+
+function PriceInput({
+  value,
+  onChange
+}: {
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const [focused, setFocused] = useState(false);
+  const [draftValue, setDraftValue] = useState(value);
+
+  useEffect(() => {
+    if (!focused) {
+      setDraftValue(value);
+    }
+  }, [focused, value]);
+
+  function formatDraftValue(rawValue: string) {
+    const parsed = numberToNull(rawValue);
+    return parsed === null ? '' : price(parsed);
+  }
+
+  return (
+    <input
+      inputMode="decimal"
+      value={draftValue}
+      onBlur={() => {
+        const formattedValue = formatDraftValue(draftValue);
+        setFocused(false);
+        setDraftValue(formattedValue);
+        onChange(formattedValue);
+      }}
+      onChange={(event) => {
+        setDraftValue(event.target.value);
+        onChange(event.target.value);
+      }}
+      onFocus={() => setFocused(true)}
+    />
+  );
+}
+
+function buildExportRows(contract: ProcurementContractSummary, locale: 'en' | 'sk'): ExportRow[] {
+  const labels =
+    locale === 'sk'
+      ? {
+          tenders: 'Zakazky',
+          tendersType: 'ZakazkyTyp',
+          tendersJosephineExternalId: 'ZakazkyJosephineExternyId',
+          contractingAuthorityCompany: 'VerejnyZadavatel',
+          measures: 'Opatrenia',
+          measuresNumber: 'OpatreniaCislo',
+          measuresSubNumber: 'OpatreniaCisloPodopatrenia',
+          measuresCallNumber: 'OpatreniaCisloVyzvy',
+          procurementContracts: 'VerejneZakazky',
+          procurementContractsProcurementType: 'VerejneZakazkyDruhZakazky',
+          procurementContractsName: 'VerejneZakazkyNazov',
+          procurementContractsLotDivision: 'VerejneZakazkyRozdelenieZakazky',
+          procurementContractsProjectName: 'VerejneZakazkyNazovProjektu',
+          procurementContractsProjectCode: 'VerejneZakazkyKodProjektu',
+          procurementContractsCpvCode: 'VerejneZakazkyCpvKod',
+          procurementContractsContractType: 'VerejneZakazkyTypZmluvy',
+          procurementContractsDeliveryAddressStreetNumber: 'VerejneZakazkyAdresaDodaniaUlicaCislo',
+          procurementContractsDeliveryAddressPostalCode: 'VerejneZakazkyAdresaDodaniaPsc',
+          procurementContractsDeliveryAddressCity: 'VerejneZakazkyAdresaDodaniaObec',
+          procurementContractsEstimatedValueExclVat: 'VerejneZakazkyOdhadovanaHodnotaBezDph',
+          procurementContractsEstimatedValueInclVat: 'VerejneZakazkyOdhadovanaHodnotaSDph',
+          procurementItems: 'PredmetyZakazky',
+          procurementItemsName: 'Nazov',
+          procurementItemsDescription: 'Popis',
+          procurementItemsQuantity: 'Mnozstvo',
+          procurementItemsUnit: 'Jednotka',
+          procurementItemsEstimatedValueExclVat: 'OdhadovanaHodnotaBezDph',
+          procurementItemsEstimatedValueInclVat: 'OdhadovanaHodnotaSDph'
+        }
+      : {
+          tenders: 'Tenders',
+          tendersType: 'TendersType',
+          tendersJosephineExternalId: 'TendersJosephineExternalId',
+          contractingAuthorityCompany: 'ContractingAuthority',
+          measures: 'Measures',
+          measuresNumber: 'MeasuresNumber',
+          measuresSubNumber: 'MeasuresSubNumber',
+          measuresCallNumber: 'MeasuresCallNumber',
+          procurementContracts: 'ProcurementContracts',
+          procurementContractsProcurementType: 'ProcurementContractsProcurementType',
+          procurementContractsName: 'ProcurementContractsName',
+          procurementContractsLotDivision: 'ProcurementContractsLotDivision',
+          procurementContractsProjectName: 'ProcurementContractsProjectName',
+          procurementContractsProjectCode: 'ProcurementContractsProjectCode',
+          procurementContractsCpvCode: 'ProcurementContractsCpvCode',
+          procurementContractsContractType: 'ProcurementContractsContractType',
+          procurementContractsDeliveryAddressStreetNumber: 'ProcurementContractsDeliveryAddressStreetNumber',
+          procurementContractsDeliveryAddressPostalCode: 'ProcurementContractsDeliveryAddressPostalCode',
+          procurementContractsDeliveryAddressCity: 'ProcurementContractsDeliveryAddressCity',
+          procurementContractsEstimatedValueExclVat: 'ProcurementContractsEstimatedValueExclVat',
+          procurementContractsEstimatedValueInclVat: 'ProcurementContractsEstimatedValueInclVat',
+          procurementItems: 'ProcurementItems',
+          procurementItemsName: 'Name',
+          procurementItemsDescription: 'Description',
+          procurementItemsQuantity: 'Quantity',
+          procurementItemsUnit: 'Unit',
+          procurementItemsEstimatedValueExclVat: 'EstimatedValueExclVat',
+          procurementItemsEstimatedValueInclVat: 'EstimatedValueInclVat'
+        };
+  const tenderTypeValues: Record<TenderType, string> =
+    locale === 'sk' ? { survey: 'Prieskum', competition: 'Sutaz' } : { survey: 'Survey', competition: 'Competition' };
+  const procurementTypeValues: Record<ProcurementType, string> =
+    locale === 'sk'
+      ? { goods: 'Tovary', services: 'Sluzby', works: 'Stavebne prace' }
+      : { goods: 'Goods', services: 'Services', works: 'Works' };
+  const procurementItemUnitValues: Record<ProcurementItemUnit, string> =
+    locale === 'sk' ? { pcs: 'ks', m: 'm', kg: 'kg' } : { pcs: 'pcs', m: 'm', kg: 'kg' };
+
+  return [
+    { label: `${labels.tenders}Id`, value: contract.tenderId },
+    { label: labels.tendersType, value: tenderTypeValues[contract.tenderType] },
+    { label: labels.tendersJosephineExternalId, value: contract.josephineExternalId },
+    { label: `${labels.contractingAuthorityCompany}Id`, value: contract.contractingAuthorityCompanyId },
+    { label: `${labels.contractingAuthorityCompany}Name`, value: contract.contractingAuthorityCompanyName },
+    { label: `${labels.measures}Id`, value: contract.measureId },
+    { label: labels.measuresNumber, value: contract.measureNumber },
+    { label: labels.measuresSubNumber, value: contract.measureSubNumber },
+    { label: labels.measuresCallNumber, value: contract.callNumber },
+    { label: `${labels.procurementContracts}Id`, value: contract.id },
+    {
+      label: labels.procurementContractsProcurementType,
+      value: contract.procurementType ? procurementTypeValues[contract.procurementType] : null
+    },
+    { label: labels.procurementContractsName, value: contract.name },
+    { label: labels.procurementContractsLotDivision, value: contract.lotDivision },
+    { label: labels.procurementContractsProjectName, value: contract.projectName },
+    { label: labels.procurementContractsProjectCode, value: contract.projectCode },
+    { label: labels.procurementContractsCpvCode, value: contract.cpvCode },
+    { label: labels.procurementContractsContractType, value: contract.contractType },
+    { label: labels.procurementContractsDeliveryAddressStreetNumber, value: contract.deliveryAddressStreetNumber },
+    { label: labels.procurementContractsDeliveryAddressPostalCode, value: contract.deliveryAddressPostalCode },
+    { label: labels.procurementContractsDeliveryAddressCity, value: contract.deliveryAddressCity },
+    { label: labels.procurementContractsEstimatedValueExclVat, value: price(contract.estimatedValueExclVat) },
+    { label: labels.procurementContractsEstimatedValueInclVat, value: price(contract.estimatedValueInclVat) },
+    ...contract.items.flatMap((item, index) => [
+      { label: `${labels.procurementItems}.${index}.Id`, value: item.id },
+      { label: `${labels.procurementItems}.${index}.${labels.procurementItemsName}`, value: item.name },
+      { label: `${labels.procurementItems}.${index}.${labels.procurementItemsDescription}`, value: item.description },
+      { label: `${labels.procurementItems}.${index}.${labels.procurementItemsQuantity}`, value: item.quantity },
+      {
+        label: `${labels.procurementItems}.${index}.${labels.procurementItemsUnit}`,
+        value: item.unit ? procurementItemUnitValues[item.unit] : null
+      },
+      {
+        label: `${labels.procurementItems}.${index}.${labels.procurementItemsEstimatedValueExclVat}`,
+        value: price(item.estimatedValueExclVat)
+      },
+      {
+        label: `${labels.procurementItems}.${index}.${labels.procurementItemsEstimatedValueInclVat}`,
+        value: price(item.estimatedValueInclVat)
+      }
+    ])
+  ];
 }
 
 export function TendersModule() {
@@ -68,13 +239,18 @@ export function TendersModule() {
   const { notify } = useNotifications();
   const [overview, setOverview] = useState<TendersOverview | null>(null);
   const [procurementContracts, setProcurementContracts] = useState<ProcurementContractSummary[]>([]);
+  const [contractingAuthorityCompanies, setContractingAuthorityCompanies] = useState<ContractingAuthorityCompanySummary[]>(
+    []
+  );
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [panelMode, setPanelMode] = useState<PanelMode>('closed');
   const [selectedContractId, setSelectedContractId] = useState<string | null>(null);
+  const [exportContractId, setExportContractId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const [tenderType, setTenderType] = useState<TenderType>('survey');
   const [josephineExternalId, setJosephineExternalId] = useState('');
+  const [contractingAuthorityCompanyId, setContractingAuthorityCompanyId] = useState('');
   const [measureNumber, setMeasureNumber] = useState('');
   const [measureSubNumber, setMeasureSubNumber] = useState('');
   const [callNumber, setCallNumber] = useState('');
@@ -96,6 +272,14 @@ export function TendersModule() {
     () => procurementContracts.find((contract) => contract.id === selectedContractId) ?? null,
     [procurementContracts, selectedContractId]
   );
+  const exportContract = useMemo(
+    () => procurementContracts.find((contract) => contract.id === exportContractId) ?? null,
+    [procurementContracts, exportContractId]
+  );
+  const exportRows = useMemo(
+    () => (exportContract ? buildExportRows(exportContract, locale) : []),
+    [exportContract, locale]
+  );
 
   async function loadProcurementContracts() {
     const { procurementContracts: loadedProcurementContracts } = await listProcurementContracts();
@@ -107,11 +291,15 @@ export function TendersModule() {
       .then(setOverview)
       .catch(() => setOverview(null));
     void loadProcurementContracts();
+    listContractingAuthorityCompanies()
+      .then(({ companies }) => setContractingAuthorityCompanies(companies))
+      .catch(() => setContractingAuthorityCompanies([]));
   }, []);
 
   function resetForm() {
     setTenderType('survey');
     setJosephineExternalId('');
+    setContractingAuthorityCompanyId('');
     setMeasureNumber('');
     setMeasureSubNumber('');
     setCallNumber('');
@@ -133,6 +321,7 @@ export function TendersModule() {
   function loadContractIntoForm(contract: ProcurementContractSummary) {
     setTenderType(contract.tenderType);
     setJosephineExternalId(contract.josephineExternalId ?? '');
+    setContractingAuthorityCompanyId(contract.contractingAuthorityCompanyId ?? '');
     setMeasureNumber(contract.measureNumber ?? '');
     setMeasureSubNumber(contract.measureSubNumber ?? '');
     setCallNumber(contract.callNumber ?? '');
@@ -146,8 +335,8 @@ export function TendersModule() {
     setDeliveryAddressStreetNumber(contract.deliveryAddressStreetNumber ?? '');
     setDeliveryAddressPostalCode(contract.deliveryAddressPostalCode ?? '');
     setDeliveryAddressCity(contract.deliveryAddressCity ?? '');
-    setEstimatedValueExclVat(stringFromNumber(contract.estimatedValueExclVat));
-    setEstimatedValueInclVat(stringFromNumber(contract.estimatedValueInclVat));
+    setEstimatedValueExclVat(priceInputValue(contract.estimatedValueExclVat));
+    setEstimatedValueInclVat(priceInputValue(contract.estimatedValueInclVat));
     setDraftItems(
       contract.items.map((item) => ({
         id: item.id,
@@ -165,6 +354,7 @@ export function TendersModule() {
     return {
       tenderType,
       josephineExternalId: emptyToNull(josephineExternalId),
+      contractingAuthorityCompanyId: emptyToNull(contractingAuthorityCompanyId),
       measureNumber: emptyToNull(measureNumber),
       measureSubNumber: emptyToNull(measureSubNumber),
       callNumber: emptyToNull(callNumber),
@@ -210,6 +400,14 @@ export function TendersModule() {
     loadContractIntoForm(contract);
     setPanelMode('closed');
     setViewMode('edit');
+  }
+
+  function openExport(contractId: string) {
+    setExportContractId(contractId);
+  }
+
+  function closeExport() {
+    setExportContractId(null);
   }
 
   function closePanel() {
@@ -296,9 +494,9 @@ export function TendersModule() {
             {item.description ? <span>{item.description}</span> : null}
             <span>
               {[
-                item.quantity === null ? null : money(item.quantity, locale),
+                item.quantity === null ? null : price(item.quantity),
                 item.unit ? t(`tenders.procurementItems.unit.${item.unit}`) : null,
-                money(item.estimatedValueExclVat, locale)
+                price(item.estimatedValueExclVat)
               ]
                 .filter(Boolean)
                 .join(' / ') || '-'}
@@ -367,25 +565,19 @@ export function TendersModule() {
                 </label>
                 <label>
                   {t('tenders.procurementItems.estimatedValueExclVat')}
-                  <input
-                    min="0"
-                    step="0.01"
-                    type="number"
-                    value={stringFromNumber(item.estimatedValueExclVat ?? null)}
+                  <PriceInput
+                    value={priceInputValue(item.estimatedValueExclVat ?? null)}
                     onChange={(event) =>
-                      updateDraftItem(item.id, { estimatedValueExclVat: numberToNull(event.target.value) })
+                      updateDraftItem(item.id, { estimatedValueExclVat: numberToNull(event) })
                     }
                   />
                 </label>
                 <label>
                   {t('tenders.procurementItems.estimatedValueInclVat')}
-                  <input
-                    min="0"
-                    step="0.01"
-                    type="number"
-                    value={stringFromNumber(item.estimatedValueInclVat ?? null)}
+                  <PriceInput
+                    value={priceInputValue(item.estimatedValueInclVat ?? null)}
                     onChange={(event) =>
-                      updateDraftItem(item.id, { estimatedValueInclVat: numberToNull(event.target.value) })
+                      updateDraftItem(item.id, { estimatedValueInclVat: numberToNull(event) })
                     }
                   />
                 </label>
@@ -443,6 +635,20 @@ export function TendersModule() {
                 value={josephineExternalId}
                 onChange={(event) => setJosephineExternalId(event.target.value)}
               />
+            </label>
+            <label>
+              {t('tenders.contractingAuthority')}
+              <select
+                value={contractingAuthorityCompanyId}
+                onChange={(event) => setContractingAuthorityCompanyId(event.target.value)}
+              >
+                <option value="">{t('tenders.none')}</option>
+                {contractingAuthorityCompanies.map((company) => (
+                  <option key={company.id} value={company.id}>
+                    {[company.name, company.ico].filter(Boolean).join(' / ')}
+                  </option>
+                ))}
+              </select>
             </label>
           </div>
         </section>
@@ -538,23 +744,11 @@ export function TendersModule() {
           <div className="form-grid">
             <label>
               {t('tenders.procurementContracts.estimatedValueExclVat')}
-              <input
-                min="0"
-                step="0.01"
-                type="number"
-                value={estimatedValueExclVat}
-                onChange={(event) => setEstimatedValueExclVat(event.target.value)}
-              />
+              <PriceInput value={estimatedValueExclVat} onChange={setEstimatedValueExclVat} />
             </label>
             <label>
               {t('tenders.procurementContracts.estimatedValueInclVat')}
-              <input
-                min="0"
-                step="0.01"
-                type="number"
-                value={estimatedValueInclVat}
-                onChange={(event) => setEstimatedValueInclVat(event.target.value)}
-              />
+              <PriceInput value={estimatedValueInclVat} onChange={setEstimatedValueInclVat} />
             </label>
           </div>
         </section>
@@ -605,6 +799,7 @@ export function TendersModule() {
                   <th>{t('tenders.procurementContracts.name')}</th>
                   <th>{t('tenders.procurementContracts.tenderType')}</th>
                   <th>{t('tenders.procurementContracts.josephineExternalId')}</th>
+                  <th>{t('tenders.contractingAuthority')}</th>
                   <th>{t('tenders.procurementContracts.measure')}</th>
                   <th>{t('tenders.procurementContracts.procurementType')}</th>
                   <th>{t('tenders.procurementContracts.project')}</th>
@@ -625,6 +820,7 @@ export function TendersModule() {
                     </td>
                     <td>{t(`tenders.tenderType.${contract.tenderType}`)}</td>
                     <td>{contract.josephineExternalId ?? '-'}</td>
+                    <td>{contract.contractingAuthorityCompanyName ?? '-'}</td>
                     <td>
                       {[contract.measureNumber, contract.measureSubNumber, contract.callNumber]
                         .filter(Boolean)
@@ -635,23 +831,36 @@ export function TendersModule() {
                     <td>{contract.cpvCode ?? '-'}</td>
                     <td>{contract.items.length}</td>
                     <td className="table-action-column">
-                      <button
-                        className="icon-text-button"
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          openEdit(contract);
-                        }}
-                      >
-                        <Pencil aria-hidden="true" />
-                        {t('tenders.edit')}
-                      </button>
+                      <div className="table-actions">
+                        <button
+                          className="icon-text-button"
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            openExport(contract.id);
+                          }}
+                        >
+                          <Download aria-hidden="true" />
+                          {t('tenders.export')}
+                        </button>
+                        <button
+                          className="icon-text-button"
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            openEdit(contract);
+                          }}
+                        >
+                          <Pencil aria-hidden="true" />
+                          {t('tenders.edit')}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
                 {procurementContracts.length === 0 ? (
                   <tr>
-                    <td colSpan={9}>{t('tenders.procurementContracts.empty')}</td>
+                    <td colSpan={10}>{t('tenders.procurementContracts.empty')}</td>
                   </tr>
                 ) : null}
               </tbody>
@@ -696,6 +905,10 @@ export function TendersModule() {
                 <dd>{selectedContract.josephineExternalId ?? '-'}</dd>
               </div>
               <div>
+                <dt>{t('tenders.contractingAuthority')}</dt>
+                <dd>{selectedContract.contractingAuthorityCompanyName ?? '-'}</dd>
+              </div>
+              <div>
                 <dt>{t('tenders.procurementContracts.measure')}</dt>
                 <dd>
                   {[selectedContract.measureNumber, selectedContract.measureSubNumber, selectedContract.callNumber]
@@ -713,7 +926,7 @@ export function TendersModule() {
               </div>
               <div>
                 <dt>{t('tenders.procurementContracts.estimatedValueExclVat')}</dt>
-                <dd>{money(selectedContract.estimatedValueExclVat, locale)}</dd>
+                <dd>{price(selectedContract.estimatedValueExclVat)}</dd>
               </div>
             </dl>
 
@@ -725,6 +938,38 @@ export function TendersModule() {
             </section>
           </div>
         </aside>
+      ) : null}
+
+      {exportContract ? (
+        <div className="modal-backdrop" onClick={closeExport}>
+          <section
+            aria-labelledby="tenders-export-title"
+            aria-modal="true"
+            className="export-modal"
+            role="dialog"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="panel-heading">
+              <div>
+                <span className="eyebrow">{t('tenders.export')}</span>
+                <h2 id="tenders-export-title">{t('tenders.export.title')}</h2>
+              </div>
+              <button className="icon-text-button" type="button" onClick={closeExport}>
+                {t('tenders.cancel')}
+              </button>
+            </div>
+            <div className="export-list-wrap">
+              <dl className="export-list">
+                {exportRows.map((row) => (
+                  <div key={row.label}>
+                    <dt>{row.label}</dt>
+                    <dd>{exportValue(row.value)}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+          </section>
+        </div>
       ) : null}
     </main>
   );

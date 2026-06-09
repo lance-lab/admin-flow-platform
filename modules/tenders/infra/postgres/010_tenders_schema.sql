@@ -68,7 +68,6 @@ CREATE TABLE IF NOT EXISTS tenders.procurement_contracts (
   project_code TEXT,
   cpv_code TEXT,
   contract_type TEXT,
-  responsible_contact_id UUID REFERENCES companies.company_persons(id) ON DELETE SET NULL,
   delivery_address_street_number TEXT,
   delivery_address_postal_code TEXT,
   delivery_address_city TEXT,
@@ -116,7 +115,7 @@ CREATE TABLE IF NOT EXISTS tenders.tender_companies (
 );
 
 ALTER TABLE tenders.procurement_contracts
-  ADD COLUMN IF NOT EXISTS responsible_contact_id UUID REFERENCES companies.company_persons(id) ON DELETE SET NULL;
+  DROP COLUMN IF EXISTS responsible_contact_id;
 
 ALTER TABLE tenders.procurement_contracts
   DROP COLUMN IF EXISTS responsible_person_id;

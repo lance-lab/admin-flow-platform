@@ -24,6 +24,7 @@ class ProcurementContractInput(BaseModel):
 
     tender_type: TenderType = Field(alias="tenderType")
     josephine_external_id: str | None = Field(default=None, alias="josephineExternalId", max_length=20)
+    contracting_authority_company_id: str | None = Field(default=None, alias="contractingAuthorityCompanyId")
     measure_number: str | None = Field(default=None, alias="measureNumber")
     measure_sub_number: str | None = Field(default=None, alias="measureSubNumber")
     call_number: str | None = Field(default=None, alias="callNumber")
@@ -124,6 +125,60 @@ def overview() -> dict[str, object]:
     }
 
 
+def assert_contracting_authority_company(conn: psycopg.Connection, company_id: str | None) -> None:
+    if not company_id:
+        return
+
+    company = conn.execute(
+        """
+        SELECT id
+        FROM companies.companies
+        WHERE id = %(company_id)s
+          AND contracting_authority = TRUE
+        """,
+        {"company_id": company_id},
+    ).fetchone()
+
+    if not company:
+        raise HTTPException(status_code=400, detail="Contracting authority company not found")
+
+
+def save_contracting_authority_company(
+    conn: psycopg.Connection,
+    tender_id: str,
+    company_id: str | None,
+) -> None:
+    conn.execute(
+        """
+        DELETE FROM tenders.tender_companies
+        WHERE tender_id = %(tender_id)s
+          AND role = 'contracting_authority'::tenders.tender_company_role
+        """,
+        {"tender_id": tender_id},
+    )
+
+    if not company_id:
+        return
+
+    conn.execute(
+        """
+        INSERT INTO tenders.tender_companies (
+          tender_id,
+          company_id,
+          role,
+          is_primary
+        )
+        VALUES (
+          %(tender_id)s,
+          %(company_id)s,
+          'contracting_authority'::tenders.tender_company_role,
+          TRUE
+        )
+        """,
+        {"tender_id": tender_id, "company_id": company_id},
+    )
+
+
 @app.get("/api/procurement-contracts")
 def list_procurement_contracts() -> dict[str, object]:
     with db_connect() as conn:
@@ -134,6 +189,8 @@ def list_procurement_contracts() -> dict[str, object]:
               pc.tender_id::text AS "tenderId",
               t.type AS "tenderType",
               t.josephine_external_id AS "josephineExternalId",
+              ca.id AS "contractingAuthorityCompanyId",
+              ca.name AS "contractingAuthorityCompanyName",
               m.id::text AS "measureId",
               m.number AS "measureNumber",
               m.sub_number AS "measureSubNumber",
@@ -153,6 +210,17 @@ def list_procurement_contracts() -> dict[str, object]:
               COALESCE(items.items, '[]'::jsonb) AS items
             FROM tenders.procurement_contracts pc
             JOIN tenders.tenders t ON t.id = pc.tender_id
+            LEFT JOIN LATERAL (
+              SELECT
+                c.id::text AS id,
+                c.name
+              FROM tenders.tender_companies tc
+              JOIN companies.companies c ON c.id = tc.company_id
+              WHERE tc.tender_id = pc.tender_id
+                AND tc.role = 'contracting_authority'::tenders.tender_company_role
+              ORDER BY tc.is_primary DESC, tc.created_at ASC
+              LIMIT 1
+            ) ca ON TRUE
             LEFT JOIN LATERAL (
               SELECT *
               FROM tenders.measures
@@ -184,12 +252,33 @@ def list_procurement_contracts() -> dict[str, object]:
     return {"procurementContracts": rows}
 
 
+@app.get("/api/contracting-authority-companies")
+def list_contracting_authority_companies() -> dict[str, object]:
+    with db_connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT
+              id::text AS id,
+              name,
+              ico
+            FROM companies.companies
+            WHERE contracting_authority = TRUE
+            ORDER BY name ASC
+            """
+        ).fetchall()
+
+    return {"companies": rows}
+
+
 @app.post("/api/procurement-contracts", status_code=status.HTTP_201_CREATED)
 def create_procurement_contract(input_data: ProcurementContractWithItemsInput) -> dict[str, object]:
     data = input_data.model_dump()
     items = data.pop("items")
+    contracting_authority_company_id = data.pop("contracting_authority_company_id")
 
     with db_connect() as conn:
+        assert_contracting_authority_company(conn, contracting_authority_company_id)
+
         try:
             tender = conn.execute(
                 """
@@ -211,6 +300,8 @@ def create_procurement_contract(input_data: ProcurementContractWithItemsInput) -
             raise HTTPException(status_code=409, detail="Tender Josephine external ID already exists") from error
 
         tender_id = tender["id"]
+        save_contracting_authority_company(conn, tender_id, contracting_authority_company_id)
+
         has_measure = any(
             data.get(field)
             for field in ("measure_number", "measure_sub_number", "call_number", "procurement_type")
@@ -307,8 +398,11 @@ def update_procurement_contract(
 ) -> dict[str, object]:
     data = input_data.model_dump()
     items = data.pop("items")
+    contracting_authority_company_id = data.pop("contracting_authority_company_id")
 
     with db_connect() as conn:
+        assert_contracting_authority_company(conn, contracting_authority_company_id)
+
         procurement_contract = conn.execute(
             """
             SELECT pc.id, pc.tender_id
@@ -322,6 +416,7 @@ def update_procurement_contract(
             raise HTTPException(status_code=404, detail="Procurement contract not found")
 
         tender_id = procurement_contract["tender_id"]
+        save_contracting_authority_company(conn, tender_id, contracting_authority_company_id)
 
         try:
             conn.execute(

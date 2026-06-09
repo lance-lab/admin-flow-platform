@@ -438,6 +438,13 @@ select {
   white-space: nowrap;
 }
 
+.table-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .data-table tbody tr {
   cursor: pointer;
 }
@@ -829,6 +836,77 @@ select {
   line-height: 1.5;
 }
 
+.export-modal {
+  width: min(1120px, calc(100vw - 48px));
+  max-height: min(78vh, 760px);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 0;
+  padding: 22px;
+  overflow: hidden;
+  border: 1px solid #dfe7e3;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 24px 80px rgba(24, 32, 35, 0.22);
+}
+
+.export-modal .panel-heading {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding-bottom: 18px;
+  background: #ffffff;
+}
+
+.export-modal h2 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.export-list-wrap {
+  min-height: 0;
+  overflow: auto;
+}
+
+.export-list {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  border: 1px solid #e8eeeb;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.export-list div {
+  display: grid;
+  grid-template-columns: minmax(320px, 0.9fr) minmax(0, 1.1fr);
+  border-bottom: 1px solid #e8eeeb;
+}
+
+.export-list div:last-child {
+  border-bottom: 0;
+}
+
+.export-list dt,
+.export-list dd {
+  margin: 0;
+  padding: 11px 13px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.export-list dt {
+  color: #657477;
+  font-size: 12px;
+  font-weight: 900;
+  background: #f6f9f8;
+}
+
+.export-list dd {
+  color: #243033;
+  font-weight: 750;
+}
+
 .confirm-actions {
   display: flex;
   justify-content: flex-end;
@@ -849,6 +927,10 @@ select {
   .nav-list {
     grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
     margin-top: 18px;
+  }
+
+  .export-list div {
+    grid-template-columns: 1fr;
   }
 
   .topbar,
