@@ -4,8 +4,10 @@ import { useI18n } from '../../../../apps/web/src/i18n/I18nProvider';
 import { useNotifications } from '../../../../apps/web/src/shell/Notifications';
 import {
   createProcurementContract,
+  getCompany,
   getContractingAuthorityCompany,
   getTendersOverview,
+  listCompanies,
   listContractingAuthorityCompanies,
   listProcurementContracts,
   updateProcurementContract,
@@ -155,8 +157,8 @@ function contactRoleLabel(role: string | null | undefined, locale: 'en' | 'sk') 
 
 function renderInfoTable(title: string, rows: { label: string; value: string | boolean | null }[]) {
   return (
-    <section className="association-info-section">
-      <h4>{title}</h4>
+    <details className="association-info-section">
+      <summary>{title}</summary>
       <table className="association-info-table">
         <tbody>
           {rows.map((row) => (
@@ -167,7 +169,7 @@ function renderInfoTable(title: string, rows: { label: string; value: string | b
           ))}
         </tbody>
       </table>
-    </section>
+    </details>
   );
 }
 
@@ -201,84 +203,90 @@ function CompanyAssociationSelector({
 
   return (
     <>
-      <label>
-        {label}
-        <select value={value.companyId} onChange={(event) => updateCompanyId(event.target.value)}>
-          <option value="">{t('tenders.none')}</option>
-          {companies.map((company) => (
-            <option key={company.id} value={company.id}>
-              {companyLabel(company)}
-            </option>
-          ))}
-        </select>
-      </label>
-      {selectedCompany
-        ? renderInfoTable(t('tenders.companyAssociation.companyInfo'), [
-            { label: t('tenders.companyAssociation.name'), value: selectedCompany.name },
-            { label: t('tenders.companyAssociation.ico'), value: selectedCompany.ico },
-            { label: t('tenders.companyAssociation.dic'), value: selectedCompany.dic },
-            { label: t('tenders.companyAssociation.icDph'), value: selectedCompany.icDph },
-            { label: t('tenders.companyAssociation.addressStreet'), value: selectedCompany.addressStreet },
-            { label: t('tenders.companyAssociation.addressNumber'), value: selectedCompany.addressNumber },
-            { label: t('tenders.companyAssociation.addressCity'), value: selectedCompany.addressCity },
-            { label: t('tenders.companyAssociation.addressCountry'), value: selectedCompany.addressCountry },
-            { label: t('tenders.companyAssociation.addressPostalCode'), value: selectedCompany.addressPostalCode },
-            {
-              label: t('tenders.contractingAuthority'),
-              value: formatBoolean(selectedCompany.contractingAuthority, t)
-            }
-          ])
-        : null}
-      <label>
-        {t('tenders.companyAssociation.contactPerson')}
-        <select
-          disabled={!value.companyId}
-          value={value.contactPersonId}
-          onChange={(event) => onChange({ ...value, contactPersonId: event.target.value })}
-        >
-          <option value="">{t('tenders.none')}</option>
-          {contacts.map((contact) => (
-            <option key={contact.id} value={contact.id}>
-              {[contact.name, contact.email].filter(Boolean).join(' / ')}
-            </option>
-          ))}
-        </select>
-      </label>
-      {selectedContact
-        ? renderInfoTable(t('tenders.companyAssociation.contactInfo'), [
-            { label: t('tenders.companyAssociation.name'), value: selectedContact.name },
-            { label: t('tenders.companyAssociation.email'), value: selectedContact.email },
-            { label: t('tenders.companyAssociation.phoneNumber'), value: selectedContact.phoneNumber },
-            { label: t('tenders.companyAssociation.dateOfBirth'), value: selectedContact.dateOfBirth },
-            { label: t('tenders.companyAssociation.role'), value: contactRoleLabel(selectedContact.role, locale) },
-            { label: t('tenders.companyAssociation.preferred'), value: formatBoolean(selectedContact.preferred, t) }
-          ])
-        : null}
-      <label>
-        {t('tenders.companyAssociation.bankAccount')}
-        <select
-          disabled={!value.companyId}
-          value={value.bankAccountId}
-          onChange={(event) => onChange({ ...value, bankAccountId: event.target.value })}
-        >
-          <option value="">{t('tenders.none')}</option>
-          {bankAccounts.map((bankAccount) => (
-            <option key={bankAccount.id} value={bankAccount.id}>
-              {bankAccountLabel(bankAccount)}
-            </option>
-          ))}
-        </select>
-      </label>
-      {selectedBankAccount
-        ? renderInfoTable(t('tenders.companyAssociation.bankAccountInfo'), [
-            {
-              label: t('tenders.companyAssociation.bankAccountNumber'),
-              value: selectedBankAccount.bankAccountNumber
-            },
-            { label: t('tenders.companyAssociation.bankCode'), value: selectedBankAccount.bankCode },
-            { label: t('tenders.companyAssociation.preferred'), value: formatBoolean(selectedBankAccount.preferred, t) }
-          ])
-        : null}
+      <div className="association-row">
+        <label>
+          {label}
+          <select value={value.companyId} onChange={(event) => updateCompanyId(event.target.value)}>
+            <option value="">{t('tenders.none')}</option>
+            {companies.map((company) => (
+              <option key={company.id} value={company.id}>
+                {companyLabel(company)}
+              </option>
+            ))}
+          </select>
+        </label>
+        {selectedCompany
+          ? renderInfoTable(t('tenders.companyAssociation.companyInfo'), [
+              { label: t('tenders.companyAssociation.name'), value: selectedCompany.name },
+              { label: t('tenders.companyAssociation.ico'), value: selectedCompany.ico },
+              { label: t('tenders.companyAssociation.dic'), value: selectedCompany.dic },
+              { label: t('tenders.companyAssociation.icDph'), value: selectedCompany.icDph },
+              { label: t('tenders.companyAssociation.addressStreet'), value: selectedCompany.addressStreet },
+              { label: t('tenders.companyAssociation.addressNumber'), value: selectedCompany.addressNumber },
+              { label: t('tenders.companyAssociation.addressCity'), value: selectedCompany.addressCity },
+              { label: t('tenders.companyAssociation.addressCountry'), value: selectedCompany.addressCountry },
+              { label: t('tenders.companyAssociation.addressPostalCode'), value: selectedCompany.addressPostalCode },
+              {
+                label: t('tenders.contractingAuthority'),
+                value: formatBoolean(selectedCompany.contractingAuthority, t)
+              }
+            ])
+          : <div aria-hidden="true" />}
+      </div>
+      <div className="association-row">
+        <label>
+          {t('tenders.companyAssociation.contactPerson')}
+          <select
+            disabled={!value.companyId}
+            value={value.contactPersonId}
+            onChange={(event) => onChange({ ...value, contactPersonId: event.target.value })}
+          >
+            <option value="">{t('tenders.none')}</option>
+            {contacts.map((contact) => (
+              <option key={contact.id} value={contact.id}>
+                {[contact.name, contact.email].filter(Boolean).join(' / ')}
+              </option>
+            ))}
+          </select>
+        </label>
+        {selectedContact
+          ? renderInfoTable(t('tenders.companyAssociation.contactInfo'), [
+              { label: t('tenders.companyAssociation.name'), value: selectedContact.name },
+              { label: t('tenders.companyAssociation.email'), value: selectedContact.email },
+              { label: t('tenders.companyAssociation.phoneNumber'), value: selectedContact.phoneNumber },
+              { label: t('tenders.companyAssociation.dateOfBirth'), value: selectedContact.dateOfBirth },
+              { label: t('tenders.companyAssociation.role'), value: contactRoleLabel(selectedContact.role, locale) },
+              { label: t('tenders.companyAssociation.preferred'), value: formatBoolean(selectedContact.preferred, t) }
+            ])
+          : <div aria-hidden="true" />}
+      </div>
+      <div className="association-row">
+        <label>
+          {t('tenders.companyAssociation.bankAccount')}
+          <select
+            disabled={!value.companyId}
+            value={value.bankAccountId}
+            onChange={(event) => onChange({ ...value, bankAccountId: event.target.value })}
+          >
+            <option value="">{t('tenders.none')}</option>
+            {bankAccounts.map((bankAccount) => (
+              <option key={bankAccount.id} value={bankAccount.id}>
+                {bankAccountLabel(bankAccount)}
+              </option>
+            ))}
+          </select>
+        </label>
+        {selectedBankAccount
+          ? renderInfoTable(t('tenders.companyAssociation.bankAccountInfo'), [
+              {
+                label: t('tenders.companyAssociation.bankAccountNumber'),
+                value: selectedBankAccount.bankAccountNumber
+              },
+              { label: t('tenders.companyAssociation.bankCode'), value: selectedBankAccount.bankCode },
+              { label: t('tenders.companyAssociation.preferred'), value: formatBoolean(selectedBankAccount.preferred, t) }
+            ])
+          : <div aria-hidden="true" />}
+      </div>
     </>
   );
 }
@@ -293,6 +301,9 @@ function buildExportRows(contract: ProcurementContractSummary, locale: 'en' | 's
           contractingAuthorityCompany: 'VerejnyZadavatel',
           contractingAuthorityContactPerson: 'VerejnyZadavatelKontaktnaOsoba',
           contractingAuthorityBankAccount: 'VerejnyZadavatelBankovyUcet',
+          supplierCompany: 'Obstaravatel',
+          supplierContactPerson: 'ObstaravatelKontaktnaOsoba',
+          supplierBankAccount: 'ObstaravatelBankovyUcet',
           measures: 'Opatrenia',
           measuresNumber: 'OpatreniaCislo',
           measuresSubNumber: 'OpatreniaCisloPodopatrenia',
@@ -325,6 +336,9 @@ function buildExportRows(contract: ProcurementContractSummary, locale: 'en' | 's
           contractingAuthorityCompany: 'ContractingAuthority',
           contractingAuthorityContactPerson: 'ContractingAuthorityContactPerson',
           contractingAuthorityBankAccount: 'ContractingAuthorityBankAccount',
+          supplierCompany: 'Supplier',
+          supplierContactPerson: 'SupplierContactPerson',
+          supplierBankAccount: 'SupplierBankAccount',
           measures: 'Measures',
           measuresNumber: 'MeasuresNumber',
           measuresSubNumber: 'MeasuresSubNumber',
@@ -407,6 +421,50 @@ function buildExportRows(contract: ProcurementContractSummary, locale: 'en' | 's
     { label: `${labels.contractingAuthorityBankAccount}Id`, value: contract.contractingAuthorityBankAccountId },
     { label: `${labels.contractingAuthorityBankAccount}Number`, value: contract.contractingAuthorityBankAccountNumber },
     { label: `${labels.contractingAuthorityBankAccount}BankCode`, value: contract.contractingAuthorityBankCode },
+    { label: `${labels.supplierCompany}Id`, value: contract.supplierCompanyId },
+    { label: `${labels.supplierCompany}Name`, value: contract.supplierCompanyName },
+    { label: `${labels.supplierCompany}Ico`, value: contract.supplierCompanyIco },
+    { label: `${labels.supplierCompany}Dic`, value: contract.supplierCompanyDic },
+    { label: `${labels.supplierCompany}IcDph`, value: contract.supplierCompanyIcDph },
+    {
+      label: `${labels.supplierCompany}AddressStreet`,
+      value: contract.supplierCompanyAddressStreet
+    },
+    {
+      label: `${labels.supplierCompany}AddressNumber`,
+      value: contract.supplierCompanyAddressNumber
+    },
+    { label: `${labels.supplierCompany}AddressCity`, value: contract.supplierCompanyAddressCity },
+    {
+      label: `${labels.supplierCompany}AddressCountry`,
+      value: contract.supplierCompanyAddressCountry
+    },
+    {
+      label: `${labels.supplierCompany}AddressPostalCode`,
+      value: contract.supplierCompanyAddressPostalCode
+    },
+    {
+      label: `${labels.supplierCompany}ContractingAuthority`,
+      value: contract.supplierCompanyContractingAuthority
+    },
+    { label: `${labels.supplierContactPerson}Id`, value: contract.supplierContactPersonId },
+    { label: `${labels.supplierContactPerson}Name`, value: contract.supplierContactPersonName },
+    { label: `${labels.supplierContactPerson}Email`, value: contract.supplierContactPersonEmail },
+    {
+      label: `${labels.supplierContactPerson}PhoneNumber`,
+      value: contract.supplierContactPersonPhoneNumber
+    },
+    {
+      label: `${labels.supplierContactPerson}DateOfBirth`,
+      value: contract.supplierContactPersonDateOfBirth
+    },
+    {
+      label: `${labels.supplierContactPerson}Role`,
+      value: contactRoleLabel(contract.supplierContactPersonRole, locale)
+    },
+    { label: `${labels.supplierBankAccount}Id`, value: contract.supplierBankAccountId },
+    { label: `${labels.supplierBankAccount}Number`, value: contract.supplierBankAccountNumber },
+    { label: `${labels.supplierBankAccount}BankCode`, value: contract.supplierBankCode },
     { label: `${labels.measures}Id`, value: contract.measureId },
     { label: labels.measuresNumber, value: contract.measureNumber },
     { label: labels.measuresSubNumber, value: contract.measureSubNumber },
@@ -456,6 +514,7 @@ export function TendersModule() {
   const [contractingAuthorityCompanies, setContractingAuthorityCompanies] = useState<ContractingAuthorityCompanySummary[]>(
     []
   );
+  const [supplierCompanies, setSupplierCompanies] = useState<ContractingAuthorityCompanySummary[]>([]);
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [panelMode, setPanelMode] = useState<PanelMode>('closed');
   const [selectedContractId, setSelectedContractId] = useState<string | null>(null);
@@ -473,6 +532,12 @@ export function TendersModule() {
   );
   const [contractingAuthorityContactPersonId, setContractingAuthorityContactPersonId] = useState('');
   const [contractingAuthorityBankAccountId, setContractingAuthorityBankAccountId] = useState('');
+  const [supplierCompanyId, setSupplierCompanyId] = useState('');
+  const [supplierCompany, setSupplierCompany] = useState<ContractingAuthorityCompanyDetail | null>(null);
+  const [supplierContacts, setSupplierContacts] = useState<CompanyContactSummary[]>([]);
+  const [supplierBankAccounts, setSupplierBankAccounts] = useState<CompanyBankAccountSummary[]>([]);
+  const [supplierContactPersonId, setSupplierContactPersonId] = useState('');
+  const [supplierBankAccountId, setSupplierBankAccountId] = useState('');
   const [measureNumber, setMeasureNumber] = useState('');
   const [measureSubNumber, setMeasureSubNumber] = useState('');
   const [callNumber, setCallNumber] = useState('');
@@ -516,6 +581,9 @@ export function TendersModule() {
     listContractingAuthorityCompanies()
       .then(({ companies }) => setContractingAuthorityCompanies(companies))
       .catch(() => setContractingAuthorityCompanies([]));
+    listCompanies()
+      .then(({ companies }) => setSupplierCompanies(companies))
+      .catch(() => setSupplierCompanies([]));
   }, []);
 
   useEffect(() => {
@@ -567,6 +635,55 @@ export function TendersModule() {
     };
   }, [contractingAuthorityCompanyId]);
 
+  useEffect(() => {
+    if (!supplierCompanyId) {
+      setSupplierCompany(null);
+      setSupplierContacts([]);
+      setSupplierBankAccounts([]);
+      setSupplierContactPersonId('');
+      setSupplierBankAccountId('');
+      return;
+    }
+
+    let active = true;
+
+    getCompany(supplierCompanyId)
+      .then(({ company }) => {
+        if (!active) {
+          return;
+        }
+
+        setSupplierCompany(company);
+        setSupplierContacts(company.contacts);
+        setSupplierBankAccounts(company.bankAccounts);
+        setSupplierContactPersonId((contactPersonId) =>
+          company.contacts.some((contact) => contact.id === contactPersonId)
+            ? contactPersonId
+            : company.contacts.find((contact) => contact.preferred)?.id ?? ''
+        );
+        setSupplierBankAccountId((bankAccountId) =>
+          company.bankAccounts.some((bankAccount) => bankAccount.id === bankAccountId)
+            ? bankAccountId
+            : company.bankAccounts.find((bankAccount) => bankAccount.preferred)?.id ?? ''
+        );
+      })
+      .catch(() => {
+        if (!active) {
+          return;
+        }
+
+        setSupplierCompany(null);
+        setSupplierContacts([]);
+        setSupplierBankAccounts([]);
+        setSupplierContactPersonId('');
+        setSupplierBankAccountId('');
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [supplierCompanyId]);
+
   function resetForm() {
     setTenderType('survey');
     setJosephineExternalId('');
@@ -576,6 +693,12 @@ export function TendersModule() {
     setContractingAuthorityBankAccountId('');
     setContractingAuthorityContacts([]);
     setContractingAuthorityBankAccounts([]);
+    setSupplierCompanyId('');
+    setSupplierCompany(null);
+    setSupplierContactPersonId('');
+    setSupplierBankAccountId('');
+    setSupplierContacts([]);
+    setSupplierBankAccounts([]);
     setMeasureNumber('');
     setMeasureSubNumber('');
     setCallNumber('');
@@ -600,6 +723,9 @@ export function TendersModule() {
     setContractingAuthorityCompanyId(contract.contractingAuthorityCompanyId ?? '');
     setContractingAuthorityContactPersonId(contract.contractingAuthorityContactPersonId ?? '');
     setContractingAuthorityBankAccountId(contract.contractingAuthorityBankAccountId ?? '');
+    setSupplierCompanyId(contract.supplierCompanyId ?? '');
+    setSupplierContactPersonId(contract.supplierContactPersonId ?? '');
+    setSupplierBankAccountId(contract.supplierBankAccountId ?? '');
     setMeasureNumber(contract.measureNumber ?? '');
     setMeasureSubNumber(contract.measureSubNumber ?? '');
     setCallNumber(contract.callNumber ?? '');
@@ -635,6 +761,9 @@ export function TendersModule() {
       contractingAuthorityCompanyId: emptyToNull(contractingAuthorityCompanyId),
       contractingAuthorityContactPersonId: emptyToNull(contractingAuthorityContactPersonId),
       contractingAuthorityBankAccountId: emptyToNull(contractingAuthorityBankAccountId),
+      supplierCompanyId: emptyToNull(supplierCompanyId),
+      supplierContactPersonId: emptyToNull(supplierContactPersonId),
+      supplierBankAccountId: emptyToNull(supplierBankAccountId),
       measureNumber: emptyToNull(measureNumber),
       measureSubNumber: emptyToNull(measureSubNumber),
       callNumber: emptyToNull(callNumber),
@@ -1046,6 +1175,31 @@ export function TendersModule() {
 
         {renderDraftItems()}
 
+        <section className="draft-section">
+          <span className="eyebrow">{t('tenders.supplier')}</span>
+          <div className="form-grid contracting-authority-grid">
+            <CompanyAssociationSelector
+              bankAccounts={supplierBankAccounts}
+              companies={supplierCompanies}
+              contacts={supplierContacts}
+              label={t('tenders.supplier')}
+              locale={locale}
+              selectedCompany={supplierCompany}
+              t={t}
+              value={{
+                companyId: supplierCompanyId,
+                contactPersonId: supplierContactPersonId,
+                bankAccountId: supplierBankAccountId
+              }}
+              onChange={(value) => {
+                setSupplierCompanyId(value.companyId);
+                setSupplierContactPersonId(value.contactPersonId);
+                setSupplierBankAccountId(value.bankAccountId);
+              }}
+            />
+          </div>
+        </section>
+
         <div className="create-step-actions">
           <button className="icon-text-button" type="button" onClick={closeMainForm}>
             {t('tenders.cancel')}
@@ -1091,6 +1245,7 @@ export function TendersModule() {
                   <th>{t('tenders.procurementContracts.tenderType')}</th>
                   <th>{t('tenders.procurementContracts.josephineExternalId')}</th>
                   <th>{t('tenders.contractingAuthority')}</th>
+                  <th>{t('tenders.supplier')}</th>
                   <th>{t('tenders.procurementContracts.measure')}</th>
                   <th>{t('tenders.procurementContracts.procurementType')}</th>
                   <th>{t('tenders.procurementContracts.project')}</th>
@@ -1112,6 +1267,7 @@ export function TendersModule() {
                     <td>{t(`tenders.tenderType.${contract.tenderType}`)}</td>
                     <td>{contract.josephineExternalId ?? '-'}</td>
                     <td>{contract.contractingAuthorityCompanyName ?? '-'}</td>
+                    <td>{contract.supplierCompanyName ?? '-'}</td>
                     <td>
                       {[contract.measureNumber, contract.measureSubNumber, contract.callNumber]
                         .filter(Boolean)
@@ -1151,7 +1307,7 @@ export function TendersModule() {
                 ))}
                 {procurementContracts.length === 0 ? (
                   <tr>
-                    <td colSpan={10}>{t('tenders.procurementContracts.empty')}</td>
+                    <td colSpan={11}>{t('tenders.procurementContracts.empty')}</td>
                   </tr>
                 ) : null}
               </tbody>
@@ -1206,6 +1362,18 @@ export function TendersModule() {
               <div>
                 <dt>{t('tenders.companyAssociation.bankAccount')}</dt>
                 <dd>{selectedContract.contractingAuthorityBankAccountNumber ?? '-'}</dd>
+              </div>
+              <div>
+                <dt>{t('tenders.supplier')}</dt>
+                <dd>{selectedContract.supplierCompanyName ?? '-'}</dd>
+              </div>
+              <div>
+                <dt>{t('tenders.companyAssociation.contactPerson')}</dt>
+                <dd>{selectedContract.supplierContactPersonName ?? '-'}</dd>
+              </div>
+              <div>
+                <dt>{t('tenders.companyAssociation.bankAccount')}</dt>
+                <dd>{selectedContract.supplierBankAccountNumber ?? '-'}</dd>
               </div>
               <div>
                 <dt>{t('tenders.procurementContracts.measure')}</dt>

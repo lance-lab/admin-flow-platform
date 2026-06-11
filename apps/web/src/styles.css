@@ -577,18 +577,42 @@ select {
 }
 
 .contracting-authority-grid {
+  grid-template-columns: 1fr;
   align-items: start;
+}
+
+.association-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+
+.association-row label {
+  min-width: 0;
 }
 
 .association-info-section {
   display: grid;
   gap: 8px;
+  margin-top: 27px;
 }
 
-.association-info-section h4 {
-  margin: 0;
+.association-info-section summary {
+  min-height: 42px;
+  padding: 10px 12px;
+  border: 1px solid #d8e2de;
+  border-radius: 8px;
+  background: #f5f8f7;
   color: #435154;
   font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.association-info-section[open] summary {
+  border-bottom-right-radius: 0;
+  border-bottom-left-radius: 0;
 }
 
 .association-info-table {
@@ -596,7 +620,8 @@ select {
   border-collapse: collapse;
   table-layout: fixed;
   border: 1px solid #e1e9e6;
-  border-radius: 8px;
+  border-top: 0;
+  border-radius: 0 0 8px 8px;
   overflow: hidden;
   background: #ffffff;
 }

@@ -82,6 +82,26 @@ export interface ProcurementContractSummary {
   contractingAuthorityBankAccountId: string | null;
   contractingAuthorityBankAccountNumber: string | null;
   contractingAuthorityBankCode: string | null;
+  supplierCompanyId: string | null;
+  supplierCompanyName: string | null;
+  supplierCompanyIco: string | null;
+  supplierCompanyDic: string | null;
+  supplierCompanyIcDph: string | null;
+  supplierCompanyAddressStreet: string | null;
+  supplierCompanyAddressNumber: string | null;
+  supplierCompanyAddressCity: string | null;
+  supplierCompanyAddressCountry: string | null;
+  supplierCompanyAddressPostalCode: string | null;
+  supplierCompanyContractingAuthority: boolean | null;
+  supplierContactPersonId: string | null;
+  supplierContactPersonName: string | null;
+  supplierContactPersonEmail: string | null;
+  supplierContactPersonPhoneNumber: string | null;
+  supplierContactPersonDateOfBirth: string | null;
+  supplierContactPersonRole: string | null;
+  supplierBankAccountId: string | null;
+  supplierBankAccountNumber: string | null;
+  supplierBankCode: string | null;
   measureId: string | null;
   measureNumber: string | null;
   measureSubNumber: string | null;
@@ -107,6 +127,9 @@ export interface ProcurementContractInput {
   contractingAuthorityCompanyId?: string | null;
   contractingAuthorityContactPersonId?: string | null;
   contractingAuthorityBankAccountId?: string | null;
+  supplierCompanyId?: string | null;
+  supplierContactPersonId?: string | null;
+  supplierBankAccountId?: string | null;
   measureNumber?: string | null;
   measureSubNumber?: string | null;
   callNumber?: string | null;
@@ -154,6 +177,14 @@ export async function getContractingAuthorityCompany(companyId: string) {
   return request<{ company: ContractingAuthorityCompanyDetail }>(
     `/api/modules/tenders/contracting-authority-companies/${companyId}`
   );
+}
+
+export async function listCompanies() {
+  return request<{ companies: ContractingAuthorityCompanySummary[] }>('/api/modules/tenders/companies');
+}
+
+export async function getCompany(companyId: string) {
+  return request<{ company: ContractingAuthorityCompanyDetail }>(`/api/modules/tenders/companies/${companyId}`);
 }
 
 export function createProcurementContract(input: ProcurementContractInput) {

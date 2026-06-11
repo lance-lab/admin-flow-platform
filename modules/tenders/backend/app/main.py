@@ -33,6 +33,9 @@ class ProcurementContractInput(BaseModel):
         default=None,
         alias="contractingAuthorityBankAccountId",
     )
+    supplier_company_id: str | None = Field(default=None, alias="supplierCompanyId")
+    supplier_contact_person_id: str | None = Field(default=None, alias="supplierContactPersonId")
+    supplier_bank_account_id: str | None = Field(default=None, alias="supplierBankAccountId")
     measure_number: str | None = Field(default=None, alias="measureNumber")
     measure_sub_number: str | None = Field(default=None, alias="measureSubNumber")
     call_number: str | None = Field(default=None, alias="callNumber")
@@ -158,12 +161,29 @@ def assert_contracting_authority_company(conn: psycopg.Connection, company_id: s
         raise HTTPException(status_code=400, detail="Contracting authority company not found")
 
 
+def assert_company(conn: psycopg.Connection, company_id: str | None) -> None:
+    if not company_id:
+        return
+
+    company = conn.execute(
+        """
+        SELECT id
+        FROM companies.companies
+        WHERE id = %(company_id)s
+        """,
+        {"company_id": company_id},
+    ).fetchone()
+
+    if not company:
+        raise HTTPException(status_code=400, detail="Company not found")
+
+
 def assert_company_contact_person(conn: psycopg.Connection, company_id: str | None, contact_person_id: str | None) -> None:
     if not contact_person_id:
         return
 
     if not company_id:
-        raise HTTPException(status_code=400, detail="Contact person requires a contracting authority company")
+        raise HTTPException(status_code=400, detail="Contact person requires a selected company")
 
     contact_person = conn.execute(
         """
@@ -184,7 +204,7 @@ def assert_company_bank_account(conn: psycopg.Connection, company_id: str | None
         return
 
     if not company_id:
-        raise HTTPException(status_code=400, detail="Bank account requires a contracting authority company")
+        raise HTTPException(status_code=400, detail="Bank account requires a selected company")
 
     bank_account = conn.execute(
         """
@@ -211,9 +231,21 @@ def assert_contracting_authority_association(
     assert_company_bank_account(conn, company_id, bank_account_id)
 
 
-def save_contracting_authority_company(
+def assert_company_association(
+    conn: psycopg.Connection,
+    company_id: str | None,
+    contact_person_id: str | None,
+    bank_account_id: str | None,
+) -> None:
+    assert_company(conn, company_id)
+    assert_company_contact_person(conn, company_id, contact_person_id)
+    assert_company_bank_account(conn, company_id, bank_account_id)
+
+
+def save_tender_company(
     conn: psycopg.Connection,
     tender_id: str,
+    role: str,
     company_id: str | None,
     contact_person_id: str | None,
     bank_account_id: str | None,
@@ -222,9 +254,9 @@ def save_contracting_authority_company(
         """
         DELETE FROM tenders.tender_companies
         WHERE tender_id = %(tender_id)s
-          AND role = 'contracting_authority'::tenders.tender_company_role
+          AND role = %(role)s::tenders.tender_company_role
         """,
-        {"tender_id": tender_id},
+        {"tender_id": tender_id, "role": role},
     )
 
     if not company_id:
@@ -243,7 +275,7 @@ def save_contracting_authority_company(
         VALUES (
           %(tender_id)s,
           %(company_id)s,
-          'contracting_authority'::tenders.tender_company_role,
+          %(role)s::tenders.tender_company_role,
           %(contact_person_id)s,
           %(bank_account_id)s,
           TRUE
@@ -251,10 +283,28 @@ def save_contracting_authority_company(
         """,
         {
             "tender_id": tender_id,
+            "role": role,
             "company_id": company_id,
             "contact_person_id": contact_person_id,
             "bank_account_id": bank_account_id,
         },
+    )
+
+
+def save_contracting_authority_company(
+    conn: psycopg.Connection,
+    tender_id: str,
+    company_id: str | None,
+    contact_person_id: str | None,
+    bank_account_id: str | None,
+) -> None:
+    save_tender_company(
+        conn,
+        tender_id,
+        "contracting_authority",
+        company_id,
+        contact_person_id,
+        bank_account_id,
     )
 
 
@@ -288,6 +338,26 @@ def list_procurement_contracts() -> dict[str, object]:
               ca.bank_account_id AS "contractingAuthorityBankAccountId",
               ca.bank_account_number AS "contractingAuthorityBankAccountNumber",
               ca.bank_code AS "contractingAuthorityBankCode",
+              supplier.id AS "supplierCompanyId",
+              supplier.name AS "supplierCompanyName",
+              supplier.ico AS "supplierCompanyIco",
+              supplier.dic AS "supplierCompanyDic",
+              supplier.ic_dph AS "supplierCompanyIcDph",
+              supplier.address_street AS "supplierCompanyAddressStreet",
+              supplier.address_number AS "supplierCompanyAddressNumber",
+              supplier.address_city AS "supplierCompanyAddressCity",
+              supplier.address_country AS "supplierCompanyAddressCountry",
+              supplier.address_postal_code AS "supplierCompanyAddressPostalCode",
+              supplier.contracting_authority AS "supplierCompanyContractingAuthority",
+              supplier.contact_person_id AS "supplierContactPersonId",
+              supplier.contact_person_name AS "supplierContactPersonName",
+              supplier.contact_person_email AS "supplierContactPersonEmail",
+              supplier.contact_person_phone_number AS "supplierContactPersonPhoneNumber",
+              supplier.contact_person_date_of_birth AS "supplierContactPersonDateOfBirth",
+              supplier.contact_person_role AS "supplierContactPersonRole",
+              supplier.bank_account_id AS "supplierBankAccountId",
+              supplier.bank_account_number AS "supplierBankAccountNumber",
+              supplier.bank_code AS "supplierBankCode",
               m.id::text AS "measureId",
               m.number AS "measureNumber",
               m.sub_number AS "measureSubNumber",
@@ -338,6 +408,37 @@ def list_procurement_contracts() -> dict[str, object]:
               ORDER BY tc.is_primary DESC, tc.created_at ASC
               LIMIT 1
             ) ca ON TRUE
+            LEFT JOIN LATERAL (
+              SELECT
+                c.id::text AS id,
+                c.name,
+                c.ico,
+                c.dic,
+                c.ic_dph,
+                c.address_street,
+                c.address_number,
+                c.address_city,
+                c.address_country,
+                c.address_postal_code,
+                c.contracting_authority,
+                cp.id::text AS contact_person_id,
+                cp.name AS contact_person_name,
+                cp.email AS contact_person_email,
+                cp.phone_number AS contact_person_phone_number,
+                cp.date_of_birth::text AS contact_person_date_of_birth,
+                cp.role AS contact_person_role,
+                cba.id::text AS bank_account_id,
+                cba.bank_account_number,
+                cba.bank_code
+              FROM tenders.tender_companies tc
+              JOIN companies.companies c ON c.id = tc.company_id
+              LEFT JOIN companies.company_persons cp ON cp.id = tc.contact_person_id
+              LEFT JOIN companies.company_bank_accounts cba ON cba.id = tc.bank_account_id
+              WHERE tc.tender_id = pc.tender_id
+                AND tc.role = 'supplier'::tenders.tender_company_role
+              ORDER BY tc.is_primary DESC, tc.created_at ASC
+              LIMIT 1
+            ) supplier ON TRUE
             LEFT JOIN LATERAL (
               SELECT *
               FROM tenders.measures
@@ -448,6 +549,83 @@ def get_contracting_authority_company(company_id: str) -> dict[str, object]:
     return {"company": {**company, "contacts": contacts, "bankAccounts": bank_accounts}}
 
 
+@app.get("/api/companies")
+def list_companies() -> dict[str, object]:
+    with db_connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT
+              id::text AS id,
+              name,
+              ico
+            FROM companies.companies
+            ORDER BY name ASC
+            """
+        ).fetchall()
+
+    return {"companies": rows}
+
+
+@app.get("/api/companies/{company_id}")
+def get_company(company_id: str) -> dict[str, object]:
+    with db_connect() as conn:
+        company = conn.execute(
+            """
+            SELECT
+              id::text AS id,
+              name,
+              ico,
+              dic,
+              ic_dph AS "icDph",
+              address_street AS "addressStreet",
+              address_number AS "addressNumber",
+              address_city AS "addressCity",
+              address_country AS "addressCountry",
+              address_postal_code AS "addressPostalCode",
+              contracting_authority AS "contractingAuthority"
+            FROM companies.companies
+            WHERE id = %(company_id)s
+            """,
+            {"company_id": company_id},
+        ).fetchone()
+
+        if not company:
+            raise HTTPException(status_code=404, detail="Company not found")
+
+        contacts = conn.execute(
+            """
+            SELECT
+              cp.id::text AS id,
+              cp.name,
+              cp.email,
+              cp.phone_number AS "phoneNumber",
+              cp.date_of_birth::text AS "dateOfBirth",
+              cp.role,
+              cp.preferred
+            FROM companies.company_persons cp
+            WHERE cp.company_id = %(company_id)s
+            ORDER BY cp.preferred DESC, cp.name ASC
+            """,
+            {"company_id": company_id},
+        ).fetchall()
+
+        bank_accounts = conn.execute(
+            """
+            SELECT
+              id::text AS id,
+              bank_account_number AS "bankAccountNumber",
+              bank_code AS "bankCode",
+              preferred
+            FROM companies.company_bank_accounts
+            WHERE company_id = %(company_id)s
+            ORDER BY preferred DESC, bank_account_number ASC
+            """,
+            {"company_id": company_id},
+        ).fetchall()
+
+    return {"company": {**company, "contacts": contacts, "bankAccounts": bank_accounts}}
+
+
 @app.post("/api/procurement-contracts", status_code=status.HTTP_201_CREATED)
 def create_procurement_contract(input_data: ProcurementContractWithItemsInput) -> dict[str, object]:
     data = input_data.model_dump()
@@ -455,6 +633,9 @@ def create_procurement_contract(input_data: ProcurementContractWithItemsInput) -
     contracting_authority_company_id = data.pop("contracting_authority_company_id")
     contracting_authority_contact_person_id = data.pop("contracting_authority_contact_person_id")
     contracting_authority_bank_account_id = data.pop("contracting_authority_bank_account_id")
+    supplier_company_id = data.pop("supplier_company_id")
+    supplier_contact_person_id = data.pop("supplier_contact_person_id")
+    supplier_bank_account_id = data.pop("supplier_bank_account_id")
 
     with db_connect() as conn:
         assert_contracting_authority_association(
@@ -462,6 +643,12 @@ def create_procurement_contract(input_data: ProcurementContractWithItemsInput) -
             contracting_authority_company_id,
             contracting_authority_contact_person_id,
             contracting_authority_bank_account_id,
+        )
+        assert_company_association(
+            conn,
+            supplier_company_id,
+            supplier_contact_person_id,
+            supplier_bank_account_id,
         )
 
         try:
@@ -491,6 +678,14 @@ def create_procurement_contract(input_data: ProcurementContractWithItemsInput) -
             contracting_authority_company_id,
             contracting_authority_contact_person_id,
             contracting_authority_bank_account_id,
+        )
+        save_tender_company(
+            conn,
+            tender_id,
+            "supplier",
+            supplier_company_id,
+            supplier_contact_person_id,
+            supplier_bank_account_id,
         )
 
         has_measure = any(
@@ -592,6 +787,9 @@ def update_procurement_contract(
     contracting_authority_company_id = data.pop("contracting_authority_company_id")
     contracting_authority_contact_person_id = data.pop("contracting_authority_contact_person_id")
     contracting_authority_bank_account_id = data.pop("contracting_authority_bank_account_id")
+    supplier_company_id = data.pop("supplier_company_id")
+    supplier_contact_person_id = data.pop("supplier_contact_person_id")
+    supplier_bank_account_id = data.pop("supplier_bank_account_id")
 
     with db_connect() as conn:
         assert_contracting_authority_association(
@@ -599,6 +797,12 @@ def update_procurement_contract(
             contracting_authority_company_id,
             contracting_authority_contact_person_id,
             contracting_authority_bank_account_id,
+        )
+        assert_company_association(
+            conn,
+            supplier_company_id,
+            supplier_contact_person_id,
+            supplier_bank_account_id,
         )
 
         procurement_contract = conn.execute(
@@ -620,6 +824,14 @@ def update_procurement_contract(
             contracting_authority_company_id,
             contracting_authority_contact_person_id,
             contracting_authority_bank_account_id,
+        )
+        save_tender_company(
+            conn,
+            tender_id,
+            "supplier",
+            supplier_company_id,
+            supplier_contact_person_id,
+            supplier_bank_account_id,
         )
 
         try:
