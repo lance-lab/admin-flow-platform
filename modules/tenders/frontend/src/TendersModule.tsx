@@ -4,10 +4,14 @@ import { useI18n } from '../../../../apps/web/src/i18n/I18nProvider';
 import { useNotifications } from '../../../../apps/web/src/shell/Notifications';
 import {
   createProcurementContract,
+  getContractingAuthorityCompany,
   getTendersOverview,
   listContractingAuthorityCompanies,
   listProcurementContracts,
   updateProcurementContract,
+  type CompanyBankAccountSummary,
+  type CompanyContactSummary,
+  type ContractingAuthorityCompanyDetail,
   type ContractingAuthorityCompanySummary,
   type ProcurementContractSummary,
   type ProcurementItemInput,
@@ -20,7 +24,12 @@ import {
 type ViewMode = 'list' | 'create' | 'edit';
 type PanelMode = 'closed' | 'detail';
 type DraftItem = ProcurementItemInput & { id: string };
-type ExportRow = { label: string; value: string | number | null };
+type ExportRow = { label: string; value: string | number | boolean | null };
+type CompanyAssociationValue = {
+  companyId: string;
+  contactPersonId: string;
+  bankAccountId: string;
+};
 
 const TENDER_TYPES: TenderType[] = ['survey', 'competition'];
 const PROCUREMENT_TYPES: ProcurementType[] = ['goods', 'services', 'works'];
@@ -71,7 +80,7 @@ function priceInputValue(value: number | null) {
   return value === null ? '' : price(value);
 }
 
-function exportValue(value: string | number | null) {
+function exportValue(value: string | number | boolean | null) {
   return value === null || value === '' ? '-' : String(value);
 }
 
@@ -115,6 +124,165 @@ function PriceInput({
   );
 }
 
+function companyLabel(company: ContractingAuthorityCompanySummary) {
+  return [company.ico, company.name].filter(Boolean).join(' / ');
+}
+
+function bankAccountLabel(bankAccount: CompanyBankAccountSummary) {
+  return [bankAccount.bankAccountNumber, bankAccount.bankCode].filter(Boolean).join(' / ');
+}
+
+function formatBoolean(value: boolean, t: ReturnType<typeof useI18n>['t']) {
+  return value ? t('tenders.yes') : t('tenders.no');
+}
+
+function contactRoleLabel(role: string | null | undefined, locale: 'en' | 'sk') {
+  const normalizedRole = role === 'executive_director' ? 'executive_dictor' : role;
+  const labels: Record<string, Record<'en' | 'sk', string>> = {
+    board_member: { en: 'Board member', sk: 'Člen predstavenstva' },
+    vice_chairman: { en: 'Vice-chairman', sk: 'Podpredseda predstavenstva' },
+    chairman: { en: 'Chairman', sk: 'Predseda predstavenstva' },
+    executive_dictor: { en: 'Executive Director', sk: 'Konateľ' },
+    owner: { en: 'Owner', sk: 'Majiteľ' }
+  };
+
+  if (!normalizedRole) {
+    return null;
+  }
+
+  return labels[normalizedRole]?.[locale] ?? normalizedRole.replace(/_/g, ' ');
+}
+
+function renderInfoTable(title: string, rows: { label: string; value: string | boolean | null }[]) {
+  return (
+    <section className="association-info-section">
+      <h4>{title}</h4>
+      <table className="association-info-table">
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.label}>
+              <th scope="row">{row.label}</th>
+              <td>{row.value === null || row.value === '' ? '-' : String(row.value)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
+  );
+}
+
+function CompanyAssociationSelector({
+  label,
+  companies,
+  selectedCompany,
+  contacts,
+  bankAccounts,
+  value,
+  onChange,
+  locale,
+  t
+}: {
+  label: string;
+  companies: ContractingAuthorityCompanySummary[];
+  selectedCompany: ContractingAuthorityCompanyDetail | null;
+  contacts: CompanyContactSummary[];
+  bankAccounts: CompanyBankAccountSummary[];
+  value: CompanyAssociationValue;
+  onChange: (value: CompanyAssociationValue) => void;
+  locale: 'en' | 'sk';
+  t: ReturnType<typeof useI18n>['t'];
+}) {
+  const selectedContact = contacts.find((contact) => contact.id === value.contactPersonId) ?? null;
+  const selectedBankAccount = bankAccounts.find((bankAccount) => bankAccount.id === value.bankAccountId) ?? null;
+
+  function updateCompanyId(companyId: string) {
+    onChange({ companyId, contactPersonId: '', bankAccountId: '' });
+  }
+
+  return (
+    <>
+      <label>
+        {label}
+        <select value={value.companyId} onChange={(event) => updateCompanyId(event.target.value)}>
+          <option value="">{t('tenders.none')}</option>
+          {companies.map((company) => (
+            <option key={company.id} value={company.id}>
+              {companyLabel(company)}
+            </option>
+          ))}
+        </select>
+      </label>
+      {selectedCompany
+        ? renderInfoTable(t('tenders.companyAssociation.companyInfo'), [
+            { label: t('tenders.companyAssociation.name'), value: selectedCompany.name },
+            { label: t('tenders.companyAssociation.ico'), value: selectedCompany.ico },
+            { label: t('tenders.companyAssociation.dic'), value: selectedCompany.dic },
+            { label: t('tenders.companyAssociation.icDph'), value: selectedCompany.icDph },
+            { label: t('tenders.companyAssociation.addressStreet'), value: selectedCompany.addressStreet },
+            { label: t('tenders.companyAssociation.addressNumber'), value: selectedCompany.addressNumber },
+            { label: t('tenders.companyAssociation.addressCity'), value: selectedCompany.addressCity },
+            { label: t('tenders.companyAssociation.addressCountry'), value: selectedCompany.addressCountry },
+            { label: t('tenders.companyAssociation.addressPostalCode'), value: selectedCompany.addressPostalCode },
+            {
+              label: t('tenders.contractingAuthority'),
+              value: formatBoolean(selectedCompany.contractingAuthority, t)
+            }
+          ])
+        : null}
+      <label>
+        {t('tenders.companyAssociation.contactPerson')}
+        <select
+          disabled={!value.companyId}
+          value={value.contactPersonId}
+          onChange={(event) => onChange({ ...value, contactPersonId: event.target.value })}
+        >
+          <option value="">{t('tenders.none')}</option>
+          {contacts.map((contact) => (
+            <option key={contact.id} value={contact.id}>
+              {[contact.name, contact.email].filter(Boolean).join(' / ')}
+            </option>
+          ))}
+        </select>
+      </label>
+      {selectedContact
+        ? renderInfoTable(t('tenders.companyAssociation.contactInfo'), [
+            { label: t('tenders.companyAssociation.name'), value: selectedContact.name },
+            { label: t('tenders.companyAssociation.email'), value: selectedContact.email },
+            { label: t('tenders.companyAssociation.phoneNumber'), value: selectedContact.phoneNumber },
+            { label: t('tenders.companyAssociation.dateOfBirth'), value: selectedContact.dateOfBirth },
+            { label: t('tenders.companyAssociation.role'), value: contactRoleLabel(selectedContact.role, locale) },
+            { label: t('tenders.companyAssociation.preferred'), value: formatBoolean(selectedContact.preferred, t) }
+          ])
+        : null}
+      <label>
+        {t('tenders.companyAssociation.bankAccount')}
+        <select
+          disabled={!value.companyId}
+          value={value.bankAccountId}
+          onChange={(event) => onChange({ ...value, bankAccountId: event.target.value })}
+        >
+          <option value="">{t('tenders.none')}</option>
+          {bankAccounts.map((bankAccount) => (
+            <option key={bankAccount.id} value={bankAccount.id}>
+              {bankAccountLabel(bankAccount)}
+            </option>
+          ))}
+        </select>
+      </label>
+      {selectedBankAccount
+        ? renderInfoTable(t('tenders.companyAssociation.bankAccountInfo'), [
+            {
+              label: t('tenders.companyAssociation.bankAccountNumber'),
+              value: selectedBankAccount.bankAccountNumber
+            },
+            { label: t('tenders.companyAssociation.bankCode'), value: selectedBankAccount.bankCode },
+            { label: t('tenders.companyAssociation.preferred'), value: formatBoolean(selectedBankAccount.preferred, t) }
+          ])
+        : null}
+    </>
+  );
+}
+
 function buildExportRows(contract: ProcurementContractSummary, locale: 'en' | 'sk'): ExportRow[] {
   const labels =
     locale === 'sk'
@@ -123,6 +291,8 @@ function buildExportRows(contract: ProcurementContractSummary, locale: 'en' | 's
           tendersType: 'ZakazkyTyp',
           tendersJosephineExternalId: 'ZakazkyJosephineExternyId',
           contractingAuthorityCompany: 'VerejnyZadavatel',
+          contractingAuthorityContactPerson: 'VerejnyZadavatelKontaktnaOsoba',
+          contractingAuthorityBankAccount: 'VerejnyZadavatelBankovyUcet',
           measures: 'Opatrenia',
           measuresNumber: 'OpatreniaCislo',
           measuresSubNumber: 'OpatreniaCisloPodopatrenia',
@@ -153,6 +323,8 @@ function buildExportRows(contract: ProcurementContractSummary, locale: 'en' | 's
           tendersType: 'TendersType',
           tendersJosephineExternalId: 'TendersJosephineExternalId',
           contractingAuthorityCompany: 'ContractingAuthority',
+          contractingAuthorityContactPerson: 'ContractingAuthorityContactPerson',
+          contractingAuthorityBankAccount: 'ContractingAuthorityBankAccount',
           measures: 'Measures',
           measuresNumber: 'MeasuresNumber',
           measuresSubNumber: 'MeasuresSubNumber',
@@ -193,6 +365,48 @@ function buildExportRows(contract: ProcurementContractSummary, locale: 'en' | 's
     { label: labels.tendersJosephineExternalId, value: contract.josephineExternalId },
     { label: `${labels.contractingAuthorityCompany}Id`, value: contract.contractingAuthorityCompanyId },
     { label: `${labels.contractingAuthorityCompany}Name`, value: contract.contractingAuthorityCompanyName },
+    { label: `${labels.contractingAuthorityCompany}Ico`, value: contract.contractingAuthorityCompanyIco },
+    { label: `${labels.contractingAuthorityCompany}Dic`, value: contract.contractingAuthorityCompanyDic },
+    { label: `${labels.contractingAuthorityCompany}IcDph`, value: contract.contractingAuthorityCompanyIcDph },
+    {
+      label: `${labels.contractingAuthorityCompany}AddressStreet`,
+      value: contract.contractingAuthorityCompanyAddressStreet
+    },
+    {
+      label: `${labels.contractingAuthorityCompany}AddressNumber`,
+      value: contract.contractingAuthorityCompanyAddressNumber
+    },
+    { label: `${labels.contractingAuthorityCompany}AddressCity`, value: contract.contractingAuthorityCompanyAddressCity },
+    {
+      label: `${labels.contractingAuthorityCompany}AddressCountry`,
+      value: contract.contractingAuthorityCompanyAddressCountry
+    },
+    {
+      label: `${labels.contractingAuthorityCompany}AddressPostalCode`,
+      value: contract.contractingAuthorityCompanyAddressPostalCode
+    },
+    {
+      label: `${labels.contractingAuthorityCompany}ContractingAuthority`,
+      value: contract.contractingAuthorityCompanyContractingAuthority
+    },
+    { label: `${labels.contractingAuthorityContactPerson}Id`, value: contract.contractingAuthorityContactPersonId },
+    { label: `${labels.contractingAuthorityContactPerson}Name`, value: contract.contractingAuthorityContactPersonName },
+    { label: `${labels.contractingAuthorityContactPerson}Email`, value: contract.contractingAuthorityContactPersonEmail },
+    {
+      label: `${labels.contractingAuthorityContactPerson}PhoneNumber`,
+      value: contract.contractingAuthorityContactPersonPhoneNumber
+    },
+    {
+      label: `${labels.contractingAuthorityContactPerson}DateOfBirth`,
+      value: contract.contractingAuthorityContactPersonDateOfBirth
+    },
+    {
+      label: `${labels.contractingAuthorityContactPerson}Role`,
+      value: contactRoleLabel(contract.contractingAuthorityContactPersonRole, locale)
+    },
+    { label: `${labels.contractingAuthorityBankAccount}Id`, value: contract.contractingAuthorityBankAccountId },
+    { label: `${labels.contractingAuthorityBankAccount}Number`, value: contract.contractingAuthorityBankAccountNumber },
+    { label: `${labels.contractingAuthorityBankAccount}BankCode`, value: contract.contractingAuthorityBankCode },
     { label: `${labels.measures}Id`, value: contract.measureId },
     { label: labels.measuresNumber, value: contract.measureNumber },
     { label: labels.measuresSubNumber, value: contract.measureSubNumber },
@@ -251,6 +465,14 @@ export function TendersModule() {
   const [tenderType, setTenderType] = useState<TenderType>('survey');
   const [josephineExternalId, setJosephineExternalId] = useState('');
   const [contractingAuthorityCompanyId, setContractingAuthorityCompanyId] = useState('');
+  const [contractingAuthorityCompany, setContractingAuthorityCompany] =
+    useState<ContractingAuthorityCompanyDetail | null>(null);
+  const [contractingAuthorityContacts, setContractingAuthorityContacts] = useState<CompanyContactSummary[]>([]);
+  const [contractingAuthorityBankAccounts, setContractingAuthorityBankAccounts] = useState<CompanyBankAccountSummary[]>(
+    []
+  );
+  const [contractingAuthorityContactPersonId, setContractingAuthorityContactPersonId] = useState('');
+  const [contractingAuthorityBankAccountId, setContractingAuthorityBankAccountId] = useState('');
   const [measureNumber, setMeasureNumber] = useState('');
   const [measureSubNumber, setMeasureSubNumber] = useState('');
   const [callNumber, setCallNumber] = useState('');
@@ -296,10 +518,64 @@ export function TendersModule() {
       .catch(() => setContractingAuthorityCompanies([]));
   }, []);
 
+  useEffect(() => {
+    if (!contractingAuthorityCompanyId) {
+      setContractingAuthorityCompany(null);
+      setContractingAuthorityContacts([]);
+      setContractingAuthorityBankAccounts([]);
+      setContractingAuthorityContactPersonId('');
+      setContractingAuthorityBankAccountId('');
+      return;
+    }
+
+    let active = true;
+
+    getContractingAuthorityCompany(contractingAuthorityCompanyId)
+      .then(({ company }) => {
+        if (!active) {
+          return;
+        }
+
+        setContractingAuthorityCompany(company);
+        setContractingAuthorityContacts(company.contacts);
+        setContractingAuthorityBankAccounts(company.bankAccounts);
+        setContractingAuthorityContactPersonId((contactPersonId) =>
+          company.contacts.some((contact) => contact.id === contactPersonId)
+            ? contactPersonId
+            : company.contacts.find((contact) => contact.preferred)?.id ?? ''
+        );
+        setContractingAuthorityBankAccountId((bankAccountId) =>
+          company.bankAccounts.some((bankAccount) => bankAccount.id === bankAccountId)
+            ? bankAccountId
+            : company.bankAccounts.find((bankAccount) => bankAccount.preferred)?.id ?? ''
+        );
+      })
+      .catch(() => {
+        if (!active) {
+          return;
+        }
+
+        setContractingAuthorityCompany(null);
+        setContractingAuthorityContacts([]);
+        setContractingAuthorityBankAccounts([]);
+        setContractingAuthorityContactPersonId('');
+        setContractingAuthorityBankAccountId('');
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [contractingAuthorityCompanyId]);
+
   function resetForm() {
     setTenderType('survey');
     setJosephineExternalId('');
     setContractingAuthorityCompanyId('');
+    setContractingAuthorityCompany(null);
+    setContractingAuthorityContactPersonId('');
+    setContractingAuthorityBankAccountId('');
+    setContractingAuthorityContacts([]);
+    setContractingAuthorityBankAccounts([]);
     setMeasureNumber('');
     setMeasureSubNumber('');
     setCallNumber('');
@@ -322,6 +598,8 @@ export function TendersModule() {
     setTenderType(contract.tenderType);
     setJosephineExternalId(contract.josephineExternalId ?? '');
     setContractingAuthorityCompanyId(contract.contractingAuthorityCompanyId ?? '');
+    setContractingAuthorityContactPersonId(contract.contractingAuthorityContactPersonId ?? '');
+    setContractingAuthorityBankAccountId(contract.contractingAuthorityBankAccountId ?? '');
     setMeasureNumber(contract.measureNumber ?? '');
     setMeasureSubNumber(contract.measureSubNumber ?? '');
     setCallNumber(contract.callNumber ?? '');
@@ -355,6 +633,8 @@ export function TendersModule() {
       tenderType,
       josephineExternalId: emptyToNull(josephineExternalId),
       contractingAuthorityCompanyId: emptyToNull(contractingAuthorityCompanyId),
+      contractingAuthorityContactPersonId: emptyToNull(contractingAuthorityContactPersonId),
+      contractingAuthorityBankAccountId: emptyToNull(contractingAuthorityBankAccountId),
       measureNumber: emptyToNull(measureNumber),
       measureSubNumber: emptyToNull(measureSubNumber),
       callNumber: emptyToNull(callNumber),
@@ -636,20 +916,31 @@ export function TendersModule() {
                 onChange={(event) => setJosephineExternalId(event.target.value)}
               />
             </label>
-            <label>
-              {t('tenders.contractingAuthority')}
-              <select
-                value={contractingAuthorityCompanyId}
-                onChange={(event) => setContractingAuthorityCompanyId(event.target.value)}
-              >
-                <option value="">{t('tenders.none')}</option>
-                {contractingAuthorityCompanies.map((company) => (
-                  <option key={company.id} value={company.id}>
-                    {[company.name, company.ico].filter(Boolean).join(' / ')}
-                  </option>
-                ))}
-              </select>
-            </label>
+          </div>
+        </section>
+
+        <section className="draft-section">
+          <span className="eyebrow">{t('tenders.contractingAuthority')}</span>
+          <div className="form-grid contracting-authority-grid">
+            <CompanyAssociationSelector
+              bankAccounts={contractingAuthorityBankAccounts}
+              companies={contractingAuthorityCompanies}
+              contacts={contractingAuthorityContacts}
+              label={t('tenders.contractingAuthority')}
+              locale={locale}
+              selectedCompany={contractingAuthorityCompany}
+              t={t}
+              value={{
+                companyId: contractingAuthorityCompanyId,
+                contactPersonId: contractingAuthorityContactPersonId,
+                bankAccountId: contractingAuthorityBankAccountId
+              }}
+              onChange={(value) => {
+                setContractingAuthorityCompanyId(value.companyId);
+                setContractingAuthorityContactPersonId(value.contactPersonId);
+                setContractingAuthorityBankAccountId(value.bankAccountId);
+              }}
+            />
           </div>
         </section>
 
@@ -907,6 +1198,14 @@ export function TendersModule() {
               <div>
                 <dt>{t('tenders.contractingAuthority')}</dt>
                 <dd>{selectedContract.contractingAuthorityCompanyName ?? '-'}</dd>
+              </div>
+              <div>
+                <dt>{t('tenders.companyAssociation.contactPerson')}</dt>
+                <dd>{selectedContract.contractingAuthorityContactPersonName ?? '-'}</dd>
+              </div>
+              <div>
+                <dt>{t('tenders.companyAssociation.bankAccount')}</dt>
+                <dd>{selectedContract.contractingAuthorityBankAccountNumber ?? '-'}</dd>
               </div>
               <div>
                 <dt>{t('tenders.procurementContracts.measure')}</dt>

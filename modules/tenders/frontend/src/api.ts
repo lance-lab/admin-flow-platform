@@ -12,6 +12,36 @@ export interface ContractingAuthorityCompanySummary {
   ico: string | null;
 }
 
+export interface CompanyContactSummary {
+  id: string;
+  name: string;
+  email: string | null;
+  phoneNumber: string | null;
+  dateOfBirth: string | null;
+  role: string | null;
+  preferred: boolean;
+}
+
+export interface CompanyBankAccountSummary {
+  id: string;
+  bankAccountNumber: string;
+  bankCode: string | null;
+  preferred: boolean;
+}
+
+export interface ContractingAuthorityCompanyDetail extends ContractingAuthorityCompanySummary {
+  dic: string | null;
+  icDph: string | null;
+  addressStreet: string | null;
+  addressNumber: string | null;
+  addressCity: string | null;
+  addressCountry: string | null;
+  addressPostalCode: string | null;
+  contractingAuthority: boolean;
+  contacts: CompanyContactSummary[];
+  bankAccounts: CompanyBankAccountSummary[];
+}
+
 export type TenderType = 'survey' | 'competition';
 export type ProcurementType = 'goods' | 'services' | 'works';
 export type ProcurementItemUnit = 'pcs' | 'm' | 'kg';
@@ -34,6 +64,24 @@ export interface ProcurementContractSummary {
   josephineExternalId: string | null;
   contractingAuthorityCompanyId: string | null;
   contractingAuthorityCompanyName: string | null;
+  contractingAuthorityCompanyIco: string | null;
+  contractingAuthorityCompanyDic: string | null;
+  contractingAuthorityCompanyIcDph: string | null;
+  contractingAuthorityCompanyAddressStreet: string | null;
+  contractingAuthorityCompanyAddressNumber: string | null;
+  contractingAuthorityCompanyAddressCity: string | null;
+  contractingAuthorityCompanyAddressCountry: string | null;
+  contractingAuthorityCompanyAddressPostalCode: string | null;
+  contractingAuthorityCompanyContractingAuthority: boolean | null;
+  contractingAuthorityContactPersonId: string | null;
+  contractingAuthorityContactPersonName: string | null;
+  contractingAuthorityContactPersonEmail: string | null;
+  contractingAuthorityContactPersonPhoneNumber: string | null;
+  contractingAuthorityContactPersonDateOfBirth: string | null;
+  contractingAuthorityContactPersonRole: string | null;
+  contractingAuthorityBankAccountId: string | null;
+  contractingAuthorityBankAccountNumber: string | null;
+  contractingAuthorityBankCode: string | null;
   measureId: string | null;
   measureNumber: string | null;
   measureSubNumber: string | null;
@@ -57,6 +105,8 @@ export interface ProcurementContractInput {
   tenderType: TenderType;
   josephineExternalId?: string | null;
   contractingAuthorityCompanyId?: string | null;
+  contractingAuthorityContactPersonId?: string | null;
+  contractingAuthorityBankAccountId?: string | null;
   measureNumber?: string | null;
   measureSubNumber?: string | null;
   callNumber?: string | null;
@@ -97,6 +147,12 @@ export function listProcurementContracts() {
 export async function listContractingAuthorityCompanies() {
   return request<{ companies: ContractingAuthorityCompanySummary[] }>(
     '/api/modules/tenders/contracting-authority-companies'
+  );
+}
+
+export async function getContractingAuthorityCompany(companyId: string) {
+  return request<{ company: ContractingAuthorityCompanyDetail }>(
+    `/api/modules/tenders/contracting-authority-companies/${companyId}`
   );
 }
 
