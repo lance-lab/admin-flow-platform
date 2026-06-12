@@ -1,0 +1,156 @@
+services:
+  gpu-api:
+    image: ghcr.io/berriai/litellm:main-latest
+    command:
+      - --config
+      - /app/litellm.laptop.yaml
+      - --host
+      - 0.0.0.0
+      - --port
+      - "4000"
+    environment:
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-sk-local-dev}
+      STORE_MODEL_IN_DB: ${STORE_MODEL_IN_DB:-false}
+      REDIS_HOST: optional-cache
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+    configs:
+      - source: litellm-laptop-config
+        target: /app/litellm.laptop.yaml
+    ports:
+      - "${GPU_API_PORT:-4000}:4000"
+    depends_on:
+      ollama:
+        condition: service_started
+        required: false
+      vllm:
+        condition: service_started
+        required: false
+      llamacpp:
+        condition: service_started
+        required: false
+      optional-cache:
+        condition: service_started
+        required: false
+    profiles:
+      - ollama
+      - vllm
+      - llamacpp
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "${OLLAMA_PORT:-11434}:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities:
+                - gpu
+    profiles:
+      - ollama
+
+  vllm:
+    image: vllm/vllm-openai:latest
+    command:
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --model
+      - ${VLLM_MODEL:-Qwen/Qwen2.5-7B-Instruct}
+      - --served-model-name
+      - ${VLLM_SERVED_MODEL_NAME:-local-model}
+      - --gpu-memory-utilization
+      - ${VLLM_GPU_MEMORY_UTILIZATION:-0.85}
+    environment:
+      HUGGING_FACE_HUB_TOKEN: ${HUGGING_FACE_HUB_TOKEN:-}
+    ports:
+      - "${VLLM_PORT:-8008}:8000"
+    volumes:
+      - hf-cache:/root/.cache/huggingface
+    ipc: host
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities:
+                - gpu
+    profiles:
+      - vllm
+
+  llamacpp:
+    image: ghcr.io/ggml-org/llama.cpp:server-cuda
+    command:
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8080"
+      - --model
+      - /models/${LLAMACPP_MODEL_FILE:-model.gguf}
+      - --ctx-size
+      - ${LLAMACPP_CTX_SIZE:-8192}
+      - --n-gpu-layers
+      - ${LLAMACPP_GPU_LAYERS:-999}
+    ports:
+      - "${LLAMACPP_PORT:-8088}:8080"
+    volumes:
+      - ${LLAMACPP_MODELS_DIR:-./models}:/models:ro
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities:
+                - gpu
+    profiles:
+      - llamacpp
+
+  optional-cache:
+    image: redis:7-alpine
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    profiles:
+      - cache
+
+volumes:
+  ollama-data:
+  hf-cache:
+  redis-data:
+
+configs:
+  litellm-laptop-config:
+    content: |
+      model_list:
+        - model_name: ollama-default
+          litellm_params:
+            model: ollama/${OLLAMA_MODEL:-llama3.1:8b}
+            api_base: http://ollama:11434
+
+        - model_name: vllm-default
+          litellm_params:
+            model: openai/${VLLM_SERVED_MODEL_NAME:-local-model}
+            api_base: http://vllm:8000/v1
+            api_key: sk-local
+
+        - model_name: llamacpp-default
+          litellm_params:
+            model: openai/${LLAMACPP_SERVED_MODEL_NAME:-local-model}
+            api_base: http://llamacpp:8080/v1
+            api_key: sk-local
+
+      general_settings:
+        master_key: ${LITELLM_MASTER_KEY:-sk-local-dev}
