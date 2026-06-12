@@ -962,6 +962,32 @@ def update_procurement_contract(
     return {"procurementContract": updated_contract}
 
 
+@app.delete("/api/procurement-contracts/{procurement_contract_id}")
+def delete_procurement_contract(procurement_contract_id: str) -> dict[str, bool]:
+    with db_connect() as conn:
+        procurement_contract = conn.execute(
+            """
+            SELECT tender_id
+            FROM tenders.procurement_contracts
+            WHERE id = %(procurement_contract_id)s
+            """,
+            {"procurement_contract_id": procurement_contract_id},
+        ).fetchone()
+
+        if not procurement_contract:
+            raise HTTPException(status_code=404, detail="Procurement contract not found")
+
+        conn.execute(
+            """
+            DELETE FROM tenders.tenders
+            WHERE id = %(tender_id)s
+            """,
+            {"tender_id": procurement_contract["tender_id"]},
+        )
+
+    return {"deleted": True}
+
+
 @app.post("/api/procurement-contracts/{procurement_contract_id}/items", status_code=status.HTTP_201_CREATED)
 def create_procurement_item(procurement_contract_id: str, input_data: ProcurementItemInput) -> dict[str, object]:
     data = input_data.model_dump()

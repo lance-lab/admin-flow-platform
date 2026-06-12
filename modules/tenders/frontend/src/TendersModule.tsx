@@ -1,9 +1,10 @@
 import { ClipboardList, Download, Pencil, Plus, Trash2 } from 'lucide-react';
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from 'react';
 import { useI18n } from '../../../../apps/web/src/i18n/I18nProvider';
 import { useNotifications } from '../../../../apps/web/src/shell/Notifications';
 import {
   createProcurementContract,
+  deleteProcurementContract,
   getCompany,
   getContractingAuthorityCompany,
   getTendersOverview,
@@ -25,8 +26,19 @@ import {
 
 type ViewMode = 'list' | 'create' | 'edit';
 type PanelMode = 'closed' | 'detail';
+type ContractFormStep = 'tender' | 'contracts' | 'items' | 'review';
 type DraftItem = ProcurementItemInput & { id: string };
 type ExportRow = { label: string; value: string | number | boolean | null };
+type DetailListRow = { label: string; value: ReactNode };
+type ProcurementItemDisplay = {
+  id: string;
+  name: string;
+  description?: string | null;
+  quantity?: number | null;
+  unit?: ProcurementItemUnit | null;
+  estimatedValueExclVat?: number | null;
+  estimatedValueInclVat?: number | null;
+};
 type CompanyAssociationValue = {
   companyId: string;
   contactPersonId: string;
@@ -36,6 +48,7 @@ type CompanyAssociationValue = {
 const TENDER_TYPES: TenderType[] = ['survey', 'competition'];
 const PROCUREMENT_TYPES: ProcurementType[] = ['goods', 'services', 'works'];
 const PROCUREMENT_ITEM_UNITS: ProcurementItemUnit[] = ['pcs', 'm', 'kg'];
+const CONTRACT_FORM_STEPS: ContractFormStep[] = ['tender', 'contracts', 'items', 'review'];
 const CAPABILITY_TRANSLATION_KEYS: Record<string, string> = {
   'Tender records': 'tenders.capabilities.tenderRecords',
   Measures: 'tenders.capabilities.measures',
@@ -153,6 +166,19 @@ function contactRoleLabel(role: string | null | undefined, locale: 'en' | 'sk') 
   }
 
   return labels[normalizedRole]?.[locale] ?? normalizedRole.replace(/_/g, ' ');
+}
+
+function DetailList({ rows }: { rows: DetailListRow[] }) {
+  return (
+    <dl className="detail-list">
+      {rows.map((row, index) => (
+        <div key={`${row.label}-${index}`}>
+          <dt>{row.label}</dt>
+          <dd>{row.value === null || row.value === undefined || row.value === '' ? '-' : row.value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
 }
 
 function renderInfoTable(title: string, rows: { label: string; value: string | boolean | null }[]) {
@@ -508,7 +534,7 @@ function buildExportRows(contract: ProcurementContractSummary, locale: 'en' | 's
 
 export function TendersModule() {
   const { locale, t } = useI18n();
-  const { notify } = useNotifications();
+  const { confirm, notify } = useNotifications();
   const [overview, setOverview] = useState<TendersOverview | null>(null);
   const [procurementContracts, setProcurementContracts] = useState<ProcurementContractSummary[]>([]);
   const [contractingAuthorityCompanies, setContractingAuthorityCompanies] = useState<ContractingAuthorityCompanySummary[]>(
@@ -517,6 +543,7 @@ export function TendersModule() {
   const [supplierCompanies, setSupplierCompanies] = useState<ContractingAuthorityCompanySummary[]>([]);
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [panelMode, setPanelMode] = useState<PanelMode>('closed');
+  const [contractFormStep, setContractFormStep] = useState<ContractFormStep>('tender');
   const [selectedContractId, setSelectedContractId] = useState<string | null>(null);
   const [exportContractId, setExportContractId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -566,6 +593,24 @@ export function TendersModule() {
   const exportRows = useMemo(
     () => (exportContract ? buildExportRows(exportContract, locale) : []),
     [exportContract, locale]
+  );
+  const selectedContractingAuthorityContact = useMemo(
+    () => contractingAuthorityContacts.find((contact) => contact.id === contractingAuthorityContactPersonId) ?? null,
+    [contractingAuthorityContactPersonId, contractingAuthorityContacts]
+  );
+  const selectedContractingAuthorityBankAccount = useMemo(
+    () =>
+      contractingAuthorityBankAccounts.find((bankAccount) => bankAccount.id === contractingAuthorityBankAccountId) ??
+      null,
+    [contractingAuthorityBankAccountId, contractingAuthorityBankAccounts]
+  );
+  const selectedSupplierContact = useMemo(
+    () => supplierContacts.find((contact) => contact.id === supplierContactPersonId) ?? null,
+    [supplierContactPersonId, supplierContacts]
+  );
+  const selectedSupplierBankAccount = useMemo(
+    () => supplierBankAccounts.find((bankAccount) => bankAccount.id === supplierBankAccountId) ?? null,
+    [supplierBankAccountId, supplierBankAccounts]
   );
 
   async function loadProcurementContracts() {
@@ -685,6 +730,7 @@ export function TendersModule() {
   }, [supplierCompanyId]);
 
   function resetForm() {
+    setContractFormStep('tender');
     setTenderType('survey');
     setJosephineExternalId('');
     setContractingAuthorityCompanyId('');
@@ -794,6 +840,7 @@ export function TendersModule() {
 
   function openCreate() {
     resetForm();
+    setContractFormStep('tender');
     setSelectedContractId(null);
     setPanelMode('closed');
     setViewMode('create');
@@ -807,6 +854,7 @@ export function TendersModule() {
   function openEdit(contract: ProcurementContractSummary) {
     setSelectedContractId(contract.id);
     loadContractIntoForm(contract);
+    setContractFormStep('tender');
     setPanelMode('closed');
     setViewMode('edit');
   }
@@ -852,8 +900,40 @@ export function TendersModule() {
     setDraftItems((items) => items.filter((item) => item.id !== itemId));
   }
 
+  const contractFormStepIndex = CONTRACT_FORM_STEPS.indexOf(contractFormStep);
+  const contractsStepIndex = CONTRACT_FORM_STEPS.indexOf('contracts');
+  const canContinueFromProcurementContract = Boolean(contractName.trim());
+  const canOpenContractFormStep = (step: ContractFormStep) =>
+    CONTRACT_FORM_STEPS.indexOf(step) <= contractsStepIndex || canContinueFromProcurementContract;
+
+  function goToContractFormStep(step: ContractFormStep) {
+    if (canOpenContractFormStep(step)) {
+      setContractFormStep(step);
+    }
+  }
+
+  function goToNextContractFormStep() {
+    const nextStep = CONTRACT_FORM_STEPS[contractFormStepIndex + 1];
+    if (nextStep && canOpenContractFormStep(nextStep)) {
+      setContractFormStep(nextStep);
+    }
+  }
+
+  function goToPreviousContractFormStep() {
+    const previousStep = CONTRACT_FORM_STEPS[contractFormStepIndex - 1];
+    if (previousStep) {
+      setContractFormStep(previousStep);
+    }
+  }
+
   async function handleCreateProcurementContract(event: FormEvent) {
     event.preventDefault();
+
+    if (contractFormStep !== 'review') {
+      goToNextContractFormStep();
+      return;
+    }
+
     setSubmitting(true);
 
     try {
@@ -878,6 +958,11 @@ export function TendersModule() {
       return;
     }
 
+    if (contractFormStep !== 'review') {
+      goToNextContractFormStep();
+      return;
+    }
+
     setSubmitting(true);
 
     try {
@@ -894,7 +979,87 @@ export function TendersModule() {
     }
   }
 
-  function renderItems(items: ProcurementContractSummary['items']) {
+  async function handleDeleteProcurementContract(contract: ProcurementContractSummary) {
+    const confirmed = await confirm({
+      title: t('tenders.deleteTitle'),
+      message: t('tenders.confirmDelete', { name: contract.name }),
+      confirmLabel: t('tenders.delete'),
+      cancelLabel: t('tenders.cancel')
+    });
+
+    if (!confirmed) {
+      return;
+    }
+
+    setSubmitting(true);
+
+    try {
+      await deleteProcurementContract(contract.id);
+      notify({ type: 'success', message: t('tenders.procurementContracts.deleted') });
+      setSelectedContractId(null);
+      resetForm();
+      setViewMode('list');
+      setPanelMode('closed');
+      await loadProcurementContracts();
+    } catch {
+      notify({ type: 'error', message: t('tenders.procurementContracts.deleteError') });
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  function renderTenderDetailList(values: {
+    tenderType: TenderType;
+    josephineExternalId?: string | null;
+    contractingAuthorityCompanyName?: string | null;
+    contractingAuthorityContactPersonName?: string | null;
+    contractingAuthorityBankAccountNumber?: string | null;
+    supplierCompanyName?: string | null;
+    supplierContactPersonName?: string | null;
+    supplierBankAccountNumber?: string | null;
+    measureNumber?: string | null;
+    measureSubNumber?: string | null;
+    callNumber?: string | null;
+    projectName?: string | null;
+    projectCode?: string | null;
+    cpvCode?: string | null;
+    estimatedValueExclVat?: ReactNode;
+  }) {
+    return (
+      <DetailList
+        rows={[
+          { label: t('tenders.procurementContracts.tenderType'), value: t(`tenders.tenderType.${values.tenderType}`) },
+          { label: t('tenders.procurementContracts.josephineExternalId'), value: values.josephineExternalId },
+          { label: t('tenders.contractingAuthority'), value: values.contractingAuthorityCompanyName },
+          { label: t('tenders.companyAssociation.contactPerson'), value: values.contractingAuthorityContactPersonName },
+          { label: t('tenders.companyAssociation.bankAccount'), value: values.contractingAuthorityBankAccountNumber },
+          { label: t('tenders.supplier'), value: values.supplierCompanyName },
+          { label: t('tenders.companyAssociation.contactPerson'), value: values.supplierContactPersonName },
+          { label: t('tenders.companyAssociation.bankAccount'), value: values.supplierBankAccountNumber },
+          {
+            label: t('tenders.procurementContracts.measure'),
+            value: [values.measureNumber, values.measureSubNumber, values.callNumber].filter(Boolean).join(' / ')
+          },
+          { label: t('tenders.procurementContracts.project'), value: values.projectName ?? values.projectCode },
+          { label: t('tenders.procurementContracts.cpvCode'), value: values.cpvCode },
+          { label: t('tenders.procurementContracts.estimatedValueExclVat'), value: values.estimatedValueExclVat }
+        ]}
+      />
+    );
+  }
+
+  function renderTenderItemsSection(items: ProcurementItemDisplay[]) {
+    return (
+      <section className="detail-section">
+        <div className="section-heading-row">
+          <h3>{t('tenders.procurementItems.title')}</h3>
+        </div>
+        {renderItems(items)}
+      </section>
+    );
+  }
+
+  function renderItems(items: ProcurementItemDisplay[]) {
     return (
       <div className="compact-list">
         {items.map((item) => (
@@ -903,9 +1068,9 @@ export function TendersModule() {
             {item.description ? <span>{item.description}</span> : null}
             <span>
               {[
-                item.quantity === null ? null : price(item.quantity),
+                item.quantity == null ? null : price(item.quantity),
                 item.unit ? t(`tenders.procurementItems.unit.${item.unit}`) : null,
-                price(item.estimatedValueExclVat)
+                price(item.estimatedValueExclVat ?? null)
               ]
                 .filter(Boolean)
                 .join(' / ') || '-'}
@@ -1024,189 +1189,270 @@ export function TendersModule() {
           </button>
         </div>
 
-        <section className="draft-section">
-          <span className="eyebrow">{t('tenders.tender')}</span>
-          <div className="form-grid">
-            <label>
-              {t('tenders.procurementContracts.tenderType')}
-              <select required value={tenderType} onChange={(event) => setTenderType(event.target.value as TenderType)}>
-                {TENDER_TYPES.map((type) => (
-                  <option key={type} value={type}>
-                    {t(`tenders.tenderType.${type}`)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              {t('tenders.procurementContracts.josephineExternalId')}
-              <input
-                maxLength={20}
-                value={josephineExternalId}
-                onChange={(event) => setJosephineExternalId(event.target.value)}
-              />
-            </label>
-          </div>
-        </section>
+        <div className="create-stepper" role="tablist" aria-label={t('tenders.createSteps')}>
+          {CONTRACT_FORM_STEPS.map((step, index) => (
+            <button
+              aria-selected={contractFormStep === step}
+              className={contractFormStep === step ? 'active' : undefined}
+              disabled={!canOpenContractFormStep(step)}
+              key={step}
+              type="button"
+              onClick={() => goToContractFormStep(step)}
+            >
+              <span>{index + 1}</span>
+              {t(`tenders.createStep.${step}`)}
+            </button>
+          ))}
+        </div>
 
-        <section className="draft-section">
-          <span className="eyebrow">{t('tenders.contractingAuthority')}</span>
-          <div className="form-grid contracting-authority-grid">
-            <CompanyAssociationSelector
-              bankAccounts={contractingAuthorityBankAccounts}
-              companies={contractingAuthorityCompanies}
-              contacts={contractingAuthorityContacts}
-              label={t('tenders.contractingAuthority')}
-              locale={locale}
-              selectedCompany={contractingAuthorityCompany}
-              t={t}
-              value={{
-                companyId: contractingAuthorityCompanyId,
-                contactPersonId: contractingAuthorityContactPersonId,
-                bankAccountId: contractingAuthorityBankAccountId
-              }}
-              onChange={(value) => {
-                setContractingAuthorityCompanyId(value.companyId);
-                setContractingAuthorityContactPersonId(value.contactPersonId);
-                setContractingAuthorityBankAccountId(value.bankAccountId);
-              }}
-            />
-          </div>
-        </section>
+        {contractFormStep === 'tender' ? (
+          <>
+            <section className="draft-section">
+              <span className="eyebrow">{t('tenders.tender')}</span>
+              <div className="form-grid">
+                <label>
+                  {t('tenders.procurementContracts.tenderType')}
+                  <select
+                    required
+                    value={tenderType}
+                    onChange={(event) => setTenderType(event.target.value as TenderType)}
+                  >
+                    {TENDER_TYPES.map((type) => (
+                      <option key={type} value={type}>
+                        {t(`tenders.tenderType.${type}`)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  {t('tenders.procurementContracts.josephineExternalId')}
+                  <input
+                    maxLength={20}
+                    value={josephineExternalId}
+                    onChange={(event) => setJosephineExternalId(event.target.value)}
+                  />
+                </label>
+              </div>
+            </section>
 
-        <section className="draft-section">
-          <span className="eyebrow">{t('tenders.measure')}</span>
-          <div className="form-grid">
-            <label>
-              {t('tenders.procurementContracts.measureNumber')}
-              <input value={measureNumber} onChange={(event) => setMeasureNumber(event.target.value)} />
-            </label>
-            <label>
-              {t('tenders.procurementContracts.measureSubNumber')}
-              <input value={measureSubNumber} onChange={(event) => setMeasureSubNumber(event.target.value)} />
-            </label>
-            <label>
-              {t('tenders.procurementContracts.callNumber')}
-              <input value={callNumber} onChange={(event) => setCallNumber(event.target.value)} />
-            </label>
-            <label>
-              {t('tenders.procurementContracts.procurementType')}
-              <select
-                value={procurementType}
-                onChange={(event) => setProcurementType(event.target.value as ProcurementType | '')}
-              >
-                <option value="">{t('tenders.none')}</option>
-                {PROCUREMENT_TYPES.map((type) => (
-                  <option key={type} value={type}>
-                    {t(`tenders.procurementType.${type}`)}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-        </section>
+            <section className="draft-section">
+              <span className="eyebrow">{t('tenders.contractingAuthority')}</span>
+              <div className="form-grid contracting-authority-grid">
+                <CompanyAssociationSelector
+                  bankAccounts={contractingAuthorityBankAccounts}
+                  companies={contractingAuthorityCompanies}
+                  contacts={contractingAuthorityContacts}
+                  label={t('tenders.contractingAuthority')}
+                  locale={locale}
+                  selectedCompany={contractingAuthorityCompany}
+                  t={t}
+                  value={{
+                    companyId: contractingAuthorityCompanyId,
+                    contactPersonId: contractingAuthorityContactPersonId,
+                    bankAccountId: contractingAuthorityBankAccountId
+                  }}
+                  onChange={(value) => {
+                    setContractingAuthorityCompanyId(value.companyId);
+                    setContractingAuthorityContactPersonId(value.contactPersonId);
+                    setContractingAuthorityBankAccountId(value.bankAccountId);
+                  }}
+                />
+              </div>
+            </section>
 
-        <section className="draft-section">
-          <span className="eyebrow">{t('tenders.procurementContract')}</span>
-          <label>
-            {t('tenders.procurementContracts.name')}
-            <input value={contractName} onChange={(event) => setContractName(event.target.value)} required />
-          </label>
-          <div className="form-grid">
-            <label>
-              {t('tenders.procurementContracts.lotDivision')}
-              <input value={lotDivision} onChange={(event) => setLotDivision(event.target.value)} />
-            </label>
-            <label>
-              {t('tenders.procurementContracts.contractType')}
-              <input value={contractType} onChange={(event) => setContractType(event.target.value)} />
-            </label>
-            <label>
-              {t('tenders.procurementContracts.projectName')}
-              <input value={projectName} onChange={(event) => setProjectName(event.target.value)} />
-            </label>
-            <label>
-              {t('tenders.procurementContracts.projectCode')}
-              <input value={projectCode} onChange={(event) => setProjectCode(event.target.value)} />
-            </label>
-            <label>
-              {t('tenders.procurementContracts.cpvCode')}
-              <input value={cpvCode} onChange={(event) => setCpvCode(event.target.value)} />
-            </label>
-          </div>
-        </section>
+            <section className="draft-section">
+              <span className="eyebrow">{t('tenders.measure')}</span>
+              <div className="form-grid">
+                <label>
+                  {t('tenders.procurementContracts.measureNumber')}
+                  <input value={measureNumber} onChange={(event) => setMeasureNumber(event.target.value)} />
+                </label>
+                <label>
+                  {t('tenders.procurementContracts.measureSubNumber')}
+                  <input value={measureSubNumber} onChange={(event) => setMeasureSubNumber(event.target.value)} />
+                </label>
+                <label>
+                  {t('tenders.procurementContracts.callNumber')}
+                  <input value={callNumber} onChange={(event) => setCallNumber(event.target.value)} />
+                </label>
+                <label>
+                  {t('tenders.procurementContracts.procurementType')}
+                  <select
+                    value={procurementType}
+                    onChange={(event) => setProcurementType(event.target.value as ProcurementType | '')}
+                  >
+                    <option value="">{t('tenders.none')}</option>
+                    {PROCUREMENT_TYPES.map((type) => (
+                      <option key={type} value={type}>
+                        {t(`tenders.procurementType.${type}`)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            </section>
+          </>
+        ) : null}
 
-        <section className="draft-section">
-          <span className="eyebrow">{t('tenders.delivery')}</span>
-          <div className="form-grid">
-            <label>
-              {t('tenders.procurementContracts.deliveryAddressStreetNumber')}
-              <input
-                value={deliveryAddressStreetNumber}
-                onChange={(event) => setDeliveryAddressStreetNumber(event.target.value)}
-              />
-            </label>
-            <label>
-              {t('tenders.procurementContracts.deliveryAddressPostalCode')}
-              <input
-                value={deliveryAddressPostalCode}
-                onChange={(event) => setDeliveryAddressPostalCode(event.target.value)}
-              />
-            </label>
-            <label>
-              {t('tenders.procurementContracts.deliveryAddressCity')}
-              <input value={deliveryAddressCity} onChange={(event) => setDeliveryAddressCity(event.target.value)} />
-            </label>
-          </div>
-        </section>
+        {contractFormStep === 'contracts' ? (
+          <>
+            <section className="draft-section">
+              <span className="eyebrow">{t('tenders.procurementContract')}</span>
+              <label>
+                {t('tenders.procurementContracts.name')}
+                <input value={contractName} onChange={(event) => setContractName(event.target.value)} required />
+              </label>
+              <div className="form-grid">
+                <label>
+                  {t('tenders.procurementContracts.lotDivision')}
+                  <input value={lotDivision} onChange={(event) => setLotDivision(event.target.value)} />
+                </label>
+                <label>
+                  {t('tenders.procurementContracts.contractType')}
+                  <input value={contractType} onChange={(event) => setContractType(event.target.value)} />
+                </label>
+                <label>
+                  {t('tenders.procurementContracts.projectName')}
+                  <input value={projectName} onChange={(event) => setProjectName(event.target.value)} />
+                </label>
+                <label>
+                  {t('tenders.procurementContracts.projectCode')}
+                  <input value={projectCode} onChange={(event) => setProjectCode(event.target.value)} />
+                </label>
+                <label>
+                  {t('tenders.procurementContracts.cpvCode')}
+                  <input value={cpvCode} onChange={(event) => setCpvCode(event.target.value)} />
+                </label>
+              </div>
+            </section>
 
-        <section className="draft-section">
-          <span className="eyebrow">{t('tenders.values')}</span>
-          <div className="form-grid">
-            <label>
-              {t('tenders.procurementContracts.estimatedValueExclVat')}
-              <PriceInput value={estimatedValueExclVat} onChange={setEstimatedValueExclVat} />
-            </label>
-            <label>
-              {t('tenders.procurementContracts.estimatedValueInclVat')}
-              <PriceInput value={estimatedValueInclVat} onChange={setEstimatedValueInclVat} />
-            </label>
-          </div>
-        </section>
+            <section className="draft-section">
+              <span className="eyebrow">{t('tenders.delivery')}</span>
+              <div className="form-grid">
+                <label>
+                  {t('tenders.procurementContracts.deliveryAddressStreetNumber')}
+                  <input
+                    value={deliveryAddressStreetNumber}
+                    onChange={(event) => setDeliveryAddressStreetNumber(event.target.value)}
+                  />
+                </label>
+                <label>
+                  {t('tenders.procurementContracts.deliveryAddressPostalCode')}
+                  <input
+                    value={deliveryAddressPostalCode}
+                    onChange={(event) => setDeliveryAddressPostalCode(event.target.value)}
+                  />
+                </label>
+                <label>
+                  {t('tenders.procurementContracts.deliveryAddressCity')}
+                  <input value={deliveryAddressCity} onChange={(event) => setDeliveryAddressCity(event.target.value)} />
+                </label>
+              </div>
+            </section>
 
-        {renderDraftItems()}
+            <section className="draft-section">
+              <span className="eyebrow">{t('tenders.values')}</span>
+              <div className="form-grid">
+                <label>
+                  {t('tenders.procurementContracts.estimatedValueExclVat')}
+                  <PriceInput value={estimatedValueExclVat} onChange={setEstimatedValueExclVat} />
+                </label>
+                <label>
+                  {t('tenders.procurementContracts.estimatedValueInclVat')}
+                  <PriceInput value={estimatedValueInclVat} onChange={setEstimatedValueInclVat} />
+                </label>
+              </div>
+            </section>
 
-        <section className="draft-section">
-          <span className="eyebrow">{t('tenders.supplier')}</span>
-          <div className="form-grid contracting-authority-grid">
-            <CompanyAssociationSelector
-              bankAccounts={supplierBankAccounts}
-              companies={supplierCompanies}
-              contacts={supplierContacts}
-              label={t('tenders.supplier')}
-              locale={locale}
-              selectedCompany={supplierCompany}
-              t={t}
-              value={{
-                companyId: supplierCompanyId,
-                contactPersonId: supplierContactPersonId,
-                bankAccountId: supplierBankAccountId
-              }}
-              onChange={(value) => {
-                setSupplierCompanyId(value.companyId);
-                setSupplierContactPersonId(value.contactPersonId);
-                setSupplierBankAccountId(value.bankAccountId);
-              }}
-            />
-          </div>
-        </section>
+            <section className="draft-section">
+              <span className="eyebrow">{t('tenders.supplier')}</span>
+              <div className="form-grid contracting-authority-grid">
+                <CompanyAssociationSelector
+                  bankAccounts={supplierBankAccounts}
+                  companies={supplierCompanies}
+                  contacts={supplierContacts}
+                  label={t('tenders.supplier')}
+                  locale={locale}
+                  selectedCompany={supplierCompany}
+                  t={t}
+                  value={{
+                    companyId: supplierCompanyId,
+                    contactPersonId: supplierContactPersonId,
+                    bankAccountId: supplierBankAccountId
+                  }}
+                  onChange={(value) => {
+                    setSupplierCompanyId(value.companyId);
+                    setSupplierContactPersonId(value.contactPersonId);
+                    setSupplierBankAccountId(value.bankAccountId);
+                  }}
+                />
+              </div>
+            </section>
+          </>
+        ) : null}
+
+        {contractFormStep === 'items' ? renderDraftItems() : null}
+
+        {contractFormStep === 'review' ? (
+          <>
+            <section className="draft-section">
+              <span className="eyebrow">{t('tenders.review')}</span>
+              {renderTenderDetailList({
+                tenderType,
+                josephineExternalId,
+                contractingAuthorityCompanyName: contractingAuthorityCompany?.name,
+                contractingAuthorityContactPersonName: selectedContractingAuthorityContact?.name,
+                contractingAuthorityBankAccountNumber: selectedContractingAuthorityBankAccount?.bankAccountNumber,
+                supplierCompanyName: supplierCompany?.name,
+                supplierContactPersonName: selectedSupplierContact?.name,
+                supplierBankAccountNumber: selectedSupplierBankAccount?.bankAccountNumber,
+                measureNumber,
+                measureSubNumber,
+                callNumber,
+                projectName,
+                projectCode,
+                cpvCode,
+                estimatedValueExclVat
+              })}
+            </section>
+            {renderTenderItemsSection(draftItems)}
+          </>
+        ) : null}
 
         <div className="create-step-actions">
-          <button className="icon-text-button" type="button" onClick={closeMainForm}>
-            {t('tenders.cancel')}
-          </button>
-          <button className="primary-button" disabled={submitting || !contractName.trim()} type="submit">
-            {mode === 'create' ? t('tenders.procurementContracts.create') : t('tenders.save')}
-          </button>
+          {contractFormStepIndex > 0 ? (
+            <button className="icon-text-button" type="button" onClick={goToPreviousContractFormStep}>
+              {t('tenders.back')}
+            </button>
+          ) : mode === 'edit' && selectedContract ? (
+            <button
+              className="danger-button"
+              disabled={submitting}
+              type="button"
+              onClick={() => void handleDeleteProcurementContract(selectedContract)}
+            >
+              <Trash2 aria-hidden="true" />
+              {t('tenders.delete')}
+            </button>
+          ) : (
+            <button className="icon-text-button" type="button" onClick={closeMainForm}>
+              {t('tenders.cancel')}
+            </button>
+          )}
+          {contractFormStep === 'review' ? (
+            <button className="primary-button" disabled={submitting || !contractName.trim()} type="submit">
+              {mode === 'create' ? t('tenders.procurementContracts.create') : t('tenders.save')}
+            </button>
+          ) : (
+            <button
+              className="primary-button"
+              disabled={!canOpenContractFormStep(CONTRACT_FORM_STEPS[contractFormStepIndex + 1])}
+              type="button"
+              onClick={goToNextContractFormStep}
+            >
+              {t('tenders.next')}
+            </button>
+          )}
         </div>
       </form>
     );
@@ -1342,67 +1588,25 @@ export function TendersModule() {
               </button>
             </div>
 
-            <dl className="detail-list">
-              <div>
-                <dt>{t('tenders.procurementContracts.tenderType')}</dt>
-                <dd>{t(`tenders.tenderType.${selectedContract.tenderType}`)}</dd>
-              </div>
-              <div>
-                <dt>{t('tenders.procurementContracts.josephineExternalId')}</dt>
-                <dd>{selectedContract.josephineExternalId ?? '-'}</dd>
-              </div>
-              <div>
-                <dt>{t('tenders.contractingAuthority')}</dt>
-                <dd>{selectedContract.contractingAuthorityCompanyName ?? '-'}</dd>
-              </div>
-              <div>
-                <dt>{t('tenders.companyAssociation.contactPerson')}</dt>
-                <dd>{selectedContract.contractingAuthorityContactPersonName ?? '-'}</dd>
-              </div>
-              <div>
-                <dt>{t('tenders.companyAssociation.bankAccount')}</dt>
-                <dd>{selectedContract.contractingAuthorityBankAccountNumber ?? '-'}</dd>
-              </div>
-              <div>
-                <dt>{t('tenders.supplier')}</dt>
-                <dd>{selectedContract.supplierCompanyName ?? '-'}</dd>
-              </div>
-              <div>
-                <dt>{t('tenders.companyAssociation.contactPerson')}</dt>
-                <dd>{selectedContract.supplierContactPersonName ?? '-'}</dd>
-              </div>
-              <div>
-                <dt>{t('tenders.companyAssociation.bankAccount')}</dt>
-                <dd>{selectedContract.supplierBankAccountNumber ?? '-'}</dd>
-              </div>
-              <div>
-                <dt>{t('tenders.procurementContracts.measure')}</dt>
-                <dd>
-                  {[selectedContract.measureNumber, selectedContract.measureSubNumber, selectedContract.callNumber]
-                    .filter(Boolean)
-                    .join(' / ') || '-'}
-                </dd>
-              </div>
-              <div>
-                <dt>{t('tenders.procurementContracts.project')}</dt>
-                <dd>{selectedContract.projectName ?? selectedContract.projectCode ?? '-'}</dd>
-              </div>
-              <div>
-                <dt>{t('tenders.procurementContracts.cpvCode')}</dt>
-                <dd>{selectedContract.cpvCode ?? '-'}</dd>
-              </div>
-              <div>
-                <dt>{t('tenders.procurementContracts.estimatedValueExclVat')}</dt>
-                <dd>{price(selectedContract.estimatedValueExclVat)}</dd>
-              </div>
-            </dl>
+            {renderTenderDetailList({
+              tenderType: selectedContract.tenderType,
+              josephineExternalId: selectedContract.josephineExternalId,
+              contractingAuthorityCompanyName: selectedContract.contractingAuthorityCompanyName,
+              contractingAuthorityContactPersonName: selectedContract.contractingAuthorityContactPersonName,
+              contractingAuthorityBankAccountNumber: selectedContract.contractingAuthorityBankAccountNumber,
+              supplierCompanyName: selectedContract.supplierCompanyName,
+              supplierContactPersonName: selectedContract.supplierContactPersonName,
+              supplierBankAccountNumber: selectedContract.supplierBankAccountNumber,
+              measureNumber: selectedContract.measureNumber,
+              measureSubNumber: selectedContract.measureSubNumber,
+              callNumber: selectedContract.callNumber,
+              projectName: selectedContract.projectName,
+              projectCode: selectedContract.projectCode,
+              cpvCode: selectedContract.cpvCode,
+              estimatedValueExclVat: price(selectedContract.estimatedValueExclVat)
+            })}
 
-            <section className="detail-section">
-              <div className="section-heading-row">
-                <h3>{t('tenders.procurementItems.title')}</h3>
-              </div>
-              {renderItems(selectedContract.items)}
-            </section>
+            {renderTenderItemsSection(selectedContract.items)}
           </div>
         </aside>
       ) : null}

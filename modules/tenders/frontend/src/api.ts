@@ -204,6 +204,12 @@ export function updateProcurementContract(procurementContractId: string, input: 
   );
 }
 
+export function deleteProcurementContract(procurementContractId: string) {
+  return request<{ deleted: boolean }>(`/api/modules/tenders/procurement-contracts/${procurementContractId}`, {
+    method: 'DELETE'
+  });
+}
+
 export function createProcurementItem(procurementContractId: string, input: ProcurementItemInput) {
   return request<{ procurementItem: ProcurementItemSummary }>(
     `/api/modules/tenders/procurement-contracts/${procurementContractId}/items`,
