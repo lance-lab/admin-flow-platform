@@ -1,0 +1,1 @@
+export { aiModule } from './module';

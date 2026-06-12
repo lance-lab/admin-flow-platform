@@ -17,13 +17,42 @@ services:
       - ./modules/tenders/infra/postgres/010_tenders_schema.sql:/docker-entrypoint-initdb.d/020_tenders_schema.sql:ro
       - ./modules/tenders/infra/postgres/011_tenders_seed.sql:/docker-entrypoint-initdb.d/021_tenders_seed.sql:ro
       - ./modules/companies/infra/postgres/022_companies_cleanup.sql:/docker-entrypoint-initdb.d/022_companies_cleanup.sql:ro
+      - ./modules/ai/infra/postgres/010_ai_schema.sql:/docker-entrypoint-initdb.d/030_ai_schema.sql:ro
+      - ./modules/ai/infra/postgres/011_ai_seed.sql:/docker-entrypoint-initdb.d/031_ai_seed.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 10
 
-  gateway:
+  redis:
+    image: redis:7-alpine
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+
+  file-storage:
+    image: minio/minio:latest
+    command:
+      - server
+      - /data
+      - --console-address
+      - ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-adminflow}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-adminflow-password}
+    ports:
+      - "${FILE_STORAGE_PORT:-9000}:9000"
+      - "${FILE_STORAGE_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - file-storage-data:/data
+
+  api:
     build:
       context: .
       dockerfile: apps/gateway/Dockerfile
@@ -34,12 +63,18 @@ services:
       WEB_BASE_URL: ${WEB_BASE_URL:-http://localhost:5173}
     ports:
       - "3000:3000"
+    networks:
+      default:
+        aliases:
+          - gateway
     depends_on:
       postgres:
         condition: service_healthy
       companies-api:
         condition: service_started
       tenders-api:
+        condition: service_started
+      ai-api:
         condition: service_started
 
   companies-api:
@@ -75,16 +110,71 @@ services:
       postgres:
         condition: service_healthy
 
-  web:
+  ai-api:
+    build:
+      context: .
+      dockerfile: modules/ai/backend/Dockerfile
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://admin_flow:admin_flow@postgres:5432/admin_flow}
+      AI_PROVIDER: ${AI_PROVIDER:-ollama}
+      AI_BASE_URL: ${AI_BASE_URL:-http://host.docker.internal:11434}
+      AI_API_KEY: ${AI_API_KEY:-}
+      AI_MODEL: ${AI_MODEL:-gemma3:4b}
+      AI_TIMEOUT_SECONDS: ${AI_TIMEOUT_SECONDS:-120}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "${AI_API_PORT:-8003}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: .
+      dockerfile: modules/ai/backend/Dockerfile
+    command: ["python", "-m", "app.worker"]
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://admin_flow:admin_flow@postgres:5432/admin_flow}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      AI_PROVIDER: ${AI_PROVIDER:-ollama}
+      AI_BASE_URL: ${AI_BASE_URL:-http://host.docker.internal:11434}
+      AI_API_KEY: ${AI_API_KEY:-}
+      AI_MODEL: ${AI_MODEL:-gemma3:4b}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  scheduler:
+    build:
+      context: .
+      dockerfile: modules/ai/backend/Dockerfile
+    command: ["python", "-m", "app.scheduler"]
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://admin_flow:admin_flow@postgres:5432/admin_flow}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  web-app:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
     environment:
-      GATEWAY_URL: ${GATEWAY_URL:-http://gateway:3000}
+      GATEWAY_URL: ${GATEWAY_URL:-http://api:3000}
     ports:
       - "5173:5173"
     depends_on:
-      - gateway
+      - api
 
 volumes:
   postgres-data:
+  redis-data:
+  file-storage-data:

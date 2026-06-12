@@ -1,0 +1,50 @@
+import type { TranslationResources } from '../../../../apps/web/src/i18n/translations';
+
+export const aiTranslations: TranslationResources = {
+  sk: {
+    'ai.eyebrow': 'Modul',
+    'ai.title': 'AI asistent',
+    'ai.status': 'Stav',
+    'ai.provider': 'Provider',
+    'ai.model': 'Model',
+    'ai.prompt': 'Prompt',
+    'ai.systemPrompt': 'Systémový prompt',
+    'ai.defaultSystemPrompt': 'Odpovedaj po slovensky: vecne, stručne, jasne.',
+    'ai.systemPromptPlaceholder': 'Voliteľné pravidlá pre model',
+    'ai.promptPlaceholder': '',
+    'ai.run': 'Spustiť',
+    'ai.running': 'Spracúvam...',
+    'ai.response': 'Odpoveď',
+    'ai.recentRuns': 'Posledné behy',
+    'ai.emptyRuns': 'Zatiaľ nie sú uložené žiadne AI behy.',
+    'ai.duration': '{{duration}} ms',
+    'ai.error': 'AI požiadavka zlyhala.',
+    'ai.capabilities.localChat': 'Lokálny modelový chat',
+    'ai.capabilities.slovakPromptTesting': 'Testovanie slovenských promptov',
+    'ai.capabilities.modelRunHistory': 'História behov modelu',
+    'ai.capabilities.workerReadyAiJobs': 'Pripravené pre worker AI úlohy'
+  },
+  en: {
+    'ai.eyebrow': 'Module',
+    'ai.title': 'AI Assistant',
+    'ai.status': 'Status',
+    'ai.provider': 'Provider',
+    'ai.model': 'Model',
+    'ai.prompt': 'Prompt',
+    'ai.systemPrompt': 'System prompt',
+    'ai.defaultSystemPrompt': 'Answer in English: factual, concise, clear.',
+    'ai.systemPromptPlaceholder': 'Optional rules for the model',
+    'ai.promptPlaceholder': '',
+    'ai.run': 'Run',
+    'ai.running': 'Running...',
+    'ai.response': 'Response',
+    'ai.recentRuns': 'Recent runs',
+    'ai.emptyRuns': 'No AI runs have been saved yet.',
+    'ai.duration': '{{duration}} ms',
+    'ai.error': 'AI request failed.',
+    'ai.capabilities.localChat': 'Local model chat',
+    'ai.capabilities.slovakPromptTesting': 'Slovak prompt testing',
+    'ai.capabilities.modelRunHistory': 'Model run history',
+    'ai.capabilities.workerReadyAiJobs': 'Worker-ready AI jobs'
+  }
+};

@@ -4,12 +4,14 @@ WORKDIR /app
 
 COPY package.json package-lock.json* ./
 COPY apps/web/package.json apps/web/package.json
+COPY modules/ai/frontend/package.json modules/ai/frontend/package.json
 COPY modules/companies/frontend/package.json modules/companies/frontend/package.json
 COPY modules/tenders/frontend/package.json modules/tenders/frontend/package.json
 COPY packages/shared-types/package.json packages/shared-types/package.json
 RUN npm install --workspace apps/web
 
 COPY apps/web apps/web
+COPY modules/ai/frontend modules/ai/frontend
 COPY modules/companies/frontend modules/companies/frontend
 COPY modules/tenders/frontend modules/tenders/frontend
 COPY packages/shared-types packages/shared-types
